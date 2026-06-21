@@ -5,6 +5,8 @@ import { Input } from './core/input';
 import { VabCamera } from './building/vab-camera';
 import { VabController } from './building/vab-controller';
 import { VabUi } from './building/vab-ui';
+import { FlightController } from './flight/flight-controller';
+import type { ShipDesign } from './entities/ship';
 
 const app = document.getElementById('app')!;
 const scene = new THREE.Scene();
@@ -30,14 +32,25 @@ const vabCam = new VabCamera(window.innerWidth / window.innerHeight);
 const vab = new VabController(scene, vabCam);
 vabCam.attach(renderer.domElement);
 
+// --- FLIGHT (added in M5) ---
+let flight: FlightController | null = null;
+
+function launchFlight(design: ShipDesign) {
+  if (flight) {
+    scene.remove(flight.group);
+  }
+  vab.group.visible = false;
+  ui.hide();
+  flight = new FlightController(design, scene, vabCam.camera);
+  fsm.transition('FLIGHT');
+}
+
 const ui = new VabUi({
   onSelectPart: (id) => (id ? vab.beginPlace(id) : vab.cancelPlace()),
   onDeleteSelected: () => vab.deleteSelected(),
   onRotateSelected: (d) => vab.rotateSelected(d),
   onLaunch: () => {
-    if (vab.isReady()) {
-      console.log('LAUNCH (FLIGHT in M5)', vab.design);
-    }
+    if (vab.isReady()) launchFlight(vab.design);
   },
   onRevert: () => {},
 });
@@ -73,7 +86,12 @@ fsm.onTransition((from, to) => {
 
 function animate() {
   requestAnimationFrame(animate);
-  ui.onReadyChange(vab.isReady());
+  if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
+  if (fsm.current === 'FLIGHT' && flight) {
+    // Auto-throttle for M5 flight test; replaced by controls in M6.
+    if (flight.throttle < 1) flight.throttle = Math.min(1, flight.throttle + 0.01);
+    flight.step(1 / 60);
+  }
   renderer.render(scene, vabCam.camera);
   input.endFrame();
 }
