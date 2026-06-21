@@ -117,6 +117,22 @@ fsm.onTransition((from, to) => {
   console.log(`state: ${from} → ${to}`);
 });
 
+const hints = document.createElement('div');
+hints.id = 'hints';
+hints.innerHTML = `
+  <h3>VAB</h3>
+  <div>Click part → click to place · Right-drag rotate view · Wheel zoom</div>
+  <div>Q/E rotate · Del delete · Launch to fly</div>
+  <h3>FLIGHT</h3>
+  <div>Shift/Ctrl throttle · Z full · X cut · Space stage</div>
+  <div>W/S pitch · A/D yaw · Q/E roll · M map · F1 revert</div>
+  <div style="margin-top:6px;color:#667">Press H to hide/show this help</div>
+`;
+document.body.appendChild(hints);
+input.onPressed('KeyH', () => {
+  hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
+});
+
 function animate() {
   requestAnimationFrame(animate);
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
