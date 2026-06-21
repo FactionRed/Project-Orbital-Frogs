@@ -53,8 +53,23 @@ export class FlightController {
     scene.add(this.group);
 
     // Spawn on launchpad at planet north pole (planet at origin, +Y = up).
-    const spawnY = PLANET.radius + 3;
-    for (const b of this.ship.bodies) b.position.y += spawnY;
+    // Find the lowest point of the assembled ship so its bottom rests on the
+    // surface — not a hardcoded offset that would bury a tall rocket or float a short one.
+    let lowestY = Infinity;
+    for (const b of this.ship.bodies) {
+      // Each part is a box; its lowest world-Y = center.y - its Y half-extent.
+      const meta = this.ship.meta.get(b);
+      const halfY = meta ? getPartDef(meta.partId).size[1] : 1;
+      const bottom = b.position.y - halfY;
+      if (bottom < lowestY) lowestY = bottom;
+    }
+    const lift = PLANET.radius - lowestY + 1; // +1m clearance so we settle rather than embed
+    for (const b of this.ship.bodies) {
+      b.position.y += lift;
+      // Settle-on-launchpad insurance: zero any inherited velocity/rotation rate.
+      b.velocity.set(0, 0, 0);
+      b.angularVelocity.set(0, 0, 0);
+    }
 
     this.stages = buildStages(design);
     this.gravity = new GravitySystem(this.world, () => this.candidates());

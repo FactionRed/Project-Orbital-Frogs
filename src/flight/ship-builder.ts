@@ -3,6 +3,7 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
+import { COLLISION_GROUP, SHIP_COLLISION_MASK } from '../physics/collision-groups';
 
 export interface BodyMeta {
   uid: string;
@@ -36,11 +37,21 @@ export function buildShipPhysics(design: ShipDesign): BuiltShip {
   for (const placed of design.parts) {
     const def = getPartDef(placed.partId);
     const shape = new CANNON.Box(new CANNON.Vec3(def.size[0], def.size[1], def.size[2]));
-    const body = new CANNON.Body({ mass: def.dryMass, shape });
+    const body = new CANNON.Body({
+      mass: def.dryMass,
+      shape,
+      // Ship parts collide with the planet/moon but NOT with each other — welded
+      // parts would otherwise push each other apart and tear the ship apart on spawn.
+      collisionFilterGroup: COLLISION_GROUP.SHIP,
+      collisionFilterMask: SHIP_COLLISION_MASK,
+    });
     body.position.set(placed.position.x, placed.position.y, placed.position.z);
     // Euler → quaternion (use the same Euler order THREE defaults to, XYZ).
     tmpQuat.setFromEuler(placed.rotation);
     body.quaternion.set(tmpQuat.x, tmpQuat.y, tmpQuat.z, tmpQuat.w);
+    // Light damping keeps the welded stack stable instead of accumulating jitter.
+    body.linearDamping = 0.05;
+    body.angularDamping = 0.05;
     bodyByUid.set(placed.uid, body);
     bodies.push(body);
 

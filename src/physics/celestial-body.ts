@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { G } from './constants';
+import { COLLISION_GROUP, CELESTIAL_COLLISION_MASK } from './collision-groups';
 
 export interface CelestialBodyData {
   name: string;
@@ -31,9 +32,15 @@ export class CelestialBody {
     this.mesh = new THREE.Mesh(geom, mat);
     this.mesh.position.copy(this.position);
 
-    // Cannon static body (so ships collide with the surface)
+    // Cannon static body (so ships collide with the surface). Lives in the
+    // CELESTIAL collision group so ship parts (group SHIP) can hit it.
     const shape = new CANNON.Sphere(data.radius);
-    this.cannonBody = new CANNON.Body({ mass: 0, shape }); // mass 0 = static
+    this.cannonBody = new CANNON.Body({
+      mass: 0, // static
+      shape,
+      collisionFilterGroup: COLLISION_GROUP.CELESTIAL,
+      collisionFilterMask: CELESTIAL_COLLISION_MASK,
+    });
     this.cannonBody.position.set(0, 0, 0);
 
     if (opts.orbitsCenter) {
