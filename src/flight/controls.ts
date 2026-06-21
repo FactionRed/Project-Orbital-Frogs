@@ -4,7 +4,7 @@ import type { Input } from '../core/input';
 import type { FlightController } from './flight-controller';
 
 const THROTTLE_RATE = 0.6; // per second
-const TORQUE = 8; // rotation response
+const TORQUE = 12; // rotation response (bumped from 8 for responsiveness)
 
 export class FlightControls {
   constructor(private input: Input, private flight: FlightController) {

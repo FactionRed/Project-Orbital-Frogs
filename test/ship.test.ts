@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { ShipDesign, aggregateMass, aggregateFuel, canLaunch } from '../src/entities/ship';
+import { getPartDef } from '../src/entities/parts-catalog';
 
 function design(partIds: string[]): ShipDesign {
   return {
@@ -16,13 +17,16 @@ function design(partIds: string[]): ShipDesign {
 
 describe('aggregateMass', () => {
   it('sums dry masses', () => {
-    expect(aggregateMass(design(['pod', 'tank', 'engine']))).toBeCloseTo(0.8 + 0.25 + 1.0, 6);
+    const expected =
+      getPartDef('pod').dryMass + getPartDef('tank').dryMass + getPartDef('engine').dryMass;
+    expect(aggregateMass(design(['pod', 'tank', 'engine']))).toBeCloseTo(expected, 6);
   });
 });
 
 describe('aggregateFuel', () => {
   it('sums fuel across tanks', () => {
-    expect(aggregateFuel(design(['pod', 'tank', 'tank', 'engine']))).toBe(800);
+    const tankFuel = getPartDef('tank').fuel ?? 0;
+    expect(aggregateFuel(design(['pod', 'tank', 'tank', 'engine']))).toBe(tankFuel * 2);
   });
   it('is 0 with no tanks', () => {
     expect(aggregateFuel(design(['pod', 'engine']))).toBe(0);
