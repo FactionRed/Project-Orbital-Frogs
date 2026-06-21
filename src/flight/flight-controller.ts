@@ -53,14 +53,17 @@ export class FlightController {
     scene.add(this.group);
 
     // Spawn on launchpad at planet north pole (planet at origin, +Y = up).
-    // Measure the lowest point of the assembled ship and rest its bottom on the
-    // surface with a small clearance.
+    // Rest the lowest point of the ship exactly on the surface (no clearance —
+    // a floating spawn would drop and bounce/tip on landing).
     const lowestY = this.lowestPointOfShip();
-    const lift = PLANET.radius - lowestY + 5;
+    const lift = PLANET.radius - lowestY;
     for (const sb of this.ship.shipBodies) {
       sb.body.position.y += lift;
       sb.body.velocity.set(0, 0, 0);
       sb.body.angularVelocity.set(0, 0, 0);
+      // Static until first throttle-up: prevents any spawn jitter from accumulating
+      // while the player reads the HUD. Re-enabled on first thrust.
+      sb.body.type = CANNON.Body.STATIC;
     }
     const rb = this.ship.rootBody;
     console.log(
@@ -224,6 +227,17 @@ export class FlightController {
 
   /** Apply thrust if any fuel remains. thrust (kN) per engine, throttle-scaled. */
   step(dt: number): void {
+    // On first throttle-up, un-freeze the ship so it can fly. Until then it sits
+    // perfectly still on the pad (no fall, no tip, no spurious crash).
+    if (this.throttle > 0) {
+      for (const sb of this.ship.shipBodies) {
+        if (sb.body.type !== CANNON.Body.DYNAMIC) {
+          sb.body.type = CANNON.Body.DYNAMIC;
+          sb.body.wakeUp();
+        }
+      }
+    }
+
     if (this.stageActive && this.ship.fuel > 0 && this.throttle > 0) {
       const totalThrust = this.ship.engines.reduce((s, e) => s + (e.def.thrust ?? 0), 0);
       if (totalThrust > 0) {
