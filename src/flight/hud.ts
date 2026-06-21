@@ -17,11 +17,11 @@ export class Hud {
     this.root.innerHTML = `
       <div id="throttle-bar"><div id="throttle-fill"></div></div>
       <div class="readouts">
-        <div>ALT: <span id="alt">0</span> m</div>
-        <div>VEL: <span id="vel">0</span> m/s</div>
-        <div>Ap/Pe: <span id="appe">-</span></div>
-        <div>FUEL: <span id="fuel">0</span></div>
-        <div>SOI: <span id="soi">-</span></div>
+        <div class="row"><span class="label">ALT</span><span id="alt" class="val">0</span><span class="unit">m</span></div>
+        <div class="row"><span class="label">VEL</span><span id="vel" class="val">0</span><span class="unit">m/s</span></div>
+        <div class="row"><span class="label">Ap/Pe</span><span id="appe" class="val wide">-</span></div>
+        <div class="row"><span class="label">FUEL</span><span id="fuel" class="val">0</span></div>
+        <div class="row"><span class="label">SOI</span><span id="soi" class="val wide">-</span></div>
       </div>
     `;
     document.body.appendChild(this.root);
@@ -57,7 +57,7 @@ export class Hud {
     this.velocity.textContent = vel.toFixed(0);
     this.apPe.textContent = apPeText;
     this.fuel.textContent = flight.ship.fuel.toFixed(0);
-    this.throttleBar.style.height = `${flight.throttle * 100}%`;
+    this.throttleBar.style.width = `${flight.throttle * 100}%`;
     // SOI label: dominant body via SOI distance to moon center.
     const moonPos = flight.moon.position;
     const md = Math.hypot(
