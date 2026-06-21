@@ -1,51 +1,85 @@
 import * as THREE from 'three';
 import './styles.css';
-import { PLANET, MOON } from './physics/constants';
-import { CelestialBody } from './physics/celestial-body';
+import { StateMachine } from './core/state-machine';
+import { Input } from './core/input';
+import { VabCamera } from './building/vab-camera';
+import { VabController } from './building/vab-controller';
+import { VabUi } from './building/vab-ui';
 
 const app = document.getElementById('app')!;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000010);
-
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200000);
-camera.position.set(0, 1500, 6000);
-camera.lookAt(0, 0, 0);
+scene.background = new THREE.Color(0x05060a);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 app.appendChild(renderer.domElement);
 
-scene.add(new THREE.AmbientLight(0x404060, 1));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(5000, 3000, 2000);
-scene.add(sun);
+scene.add(new THREE.AmbientLight(0x606080, 1));
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(20, 40, 30);
+scene.add(key);
 
-const planet = new CelestialBody({
-  name: PLANET.name,
-  radius: PLANET.radius,
-  mass: PLANET.mass,
-  color: PLANET.color,
+const grid = new THREE.GridHelper(100, 40, 0x335, 0x223);
+scene.add(grid);
+
+const fsm = new StateMachine();
+const input = new Input();
+input.attach();
+
+const vabCam = new VabCamera(window.innerWidth / window.innerHeight);
+const vab = new VabController(scene, vabCam);
+vabCam.attach(renderer.domElement);
+
+const ui = new VabUi({
+  onSelectPart: (id) => (id ? vab.beginPlace(id) : vab.cancelPlace()),
+  onDeleteSelected: () => vab.deleteSelected(),
+  onRotateSelected: (d) => vab.rotateSelected(d),
+  onLaunch: () => {
+    if (vab.isReady()) {
+      console.log('LAUNCH (FLIGHT in M5)', vab.design);
+    }
+  },
+  onRevert: () => {},
 });
-scene.add(planet.mesh);
 
-const moon = new CelestialBody(
-  { name: MOON.name, radius: MOON.radius, mass: MOON.mass, color: MOON.color },
-  { orbitsCenter: true, orbitRadius: MOON.orbitRadius, orbitPeriod: MOON.orbitPeriod },
-);
-scene.add(moon.mesh);
+input.onPressed('Delete', () => vab.deleteSelected());
+input.onPressed('KeyQ', () => vab.rotateSelected(-90));
+input.onPressed('KeyE', () => vab.rotateSelected(90));
 
-const clock = new THREE.Clock();
+const ndc = new THREE.Vector2();
+renderer.domElement.addEventListener('pointermove', (e) => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.set(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  if (fsm.current === 'BUILD') vab.onPointerMove(ndc);
+});
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || fsm.current !== 'BUILD') return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.set(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  if (vab['ghost']) vab.onPointerUp(ndc);
+  else vab.selectAt(ndc);
+  ui.onReadyChange(vab.isReady());
+});
+
+fsm.onTransition((from, to) => {
+  console.log(`state: ${from} → ${to}`);
+});
+
 function animate() {
   requestAnimationFrame(animate);
-  const t = clock.getElapsedTime();
-  planet.update(t);
-  moon.update(t);
-  renderer.render(scene, camera);
+  ui.onReadyChange(vab.isReady());
+  renderer.render(scene, vabCam.camera);
+  input.endFrame();
 }
 animate();
 
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  vabCam.resize(window.innerWidth / window.innerHeight);
 });
