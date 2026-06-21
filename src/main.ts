@@ -108,7 +108,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     ((e.clientX - rect.left) / rect.width) * 2 - 1,
     -((e.clientY - rect.top) / rect.height) * 2 + 1,
   );
-  if (vab['ghost']) vab.onPointerUp(ndc);
+  if (vab.isPlacing()) vab.onPointerUp(ndc);
   else vab.selectAt(ndc);
   ui.onReadyChange(vab.isReady());
 });

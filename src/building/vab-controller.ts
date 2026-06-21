@@ -20,6 +20,11 @@ export class VabController {
     scene.add(this.group);
   }
 
+  /** True when a part is currently being dragged from the palette (ghost shown). */
+  isPlacing(): boolean {
+    return this.ghost !== null;
+  }
+
   /** Begin placing a part from the palette. */
   beginPlace(partId: string): void {
     this.cancelPlace();
