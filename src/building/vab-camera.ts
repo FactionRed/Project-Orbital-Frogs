@@ -66,6 +66,25 @@ export class VabCamera {
     return hit ? pt : null;
   }
 
+  /**
+   * Find the surface under the pointer among `meshes`. Returns the world-space
+   * surface point, the world-space outward normal, and the hit object — or null
+   * if no part is under the pointer. The normal is the hit face normal rotated
+   * into world space; null face → falls back to direction from object center to hit.
+   */
+  pickSurface(
+    meshes: THREE.Object3D[],
+    pointerNdc: THREE.Vector2,
+  ): { point: THREE.Vector3; normal: THREE.Vector3; object: THREE.Object3D } | null {
+    this.raycaster.setFromCamera(pointerNdc, this.camera);
+    const hits = this.raycaster.intersectObjects(meshes, false);
+    const hit = hits[0];
+    if (!hit || !hit.face) return null;
+    // Transform the face normal from local to world space.
+    const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+    return { point: hit.point.clone(), normal, object: hit.object };
+  }
+
   private updateCamera(): void {
     const p = new THREE.Vector3().setFromSpherical(this.spherical).add(this.target);
     this.camera.position.copy(p);

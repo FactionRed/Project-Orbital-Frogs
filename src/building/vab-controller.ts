@@ -13,6 +13,7 @@ export class VabController {
   private meshes = new Map<string, THREE.Mesh>(); // uid -> mesh
   private selectedPartId: string | null = null; // catalog partId being placed
   private selectedUid: string | null = null; // placed uid currently selected
+  private snapTargetUid: string | null = null; // uid of part the ghost is currently snapped to
   private ghost: THREE.Mesh | null = null;
   private uidCounter = 0;
 
@@ -42,27 +43,46 @@ export class VabController {
     this.selectedPartId = null;
   }
 
-  /** Drag the ghost to follow the pointer on the ground plane. */
+  /**
+   * Drag the ghost to follow the pointer. If the pointer is over an existing
+   * part, snap against that surface (offset outward by the ghost's half-extent
+   * along the hit normal so the new part sits flush on the surface). Otherwise
+   * fall back to the ground plane (Y=0). This lets parts stack vertically.
+   */
   onPointerMove(ndc: THREE.Vector2): void {
     if (!this.ghost) return;
+    const def = getPartDef(this.selectedPartId!);
+    const meshes = [...this.meshes.values()];
+    const snap = this.camera.pickSurface(meshes, ndc);
+    if (snap) {
+      // Project the ghost's half-extent onto the snap normal so the new part's
+      // face sits flush on the target surface (center = surface + normal*half).
+      const half = Math.abs(snap.normal.x * def.size[0]) + Math.abs(snap.normal.y * def.size[1]) + Math.abs(snap.normal.z * def.size[2]);
+      this.ghost.position.copy(snap.point).addScaledVector(snap.normal, half);
+      this.snapTargetUid = (snap.object.userData.uid as string) ?? null;
+      return;
+    }
+    this.snapTargetUid = null;
     const pt = this.camera.pointerOnGround(ndc);
     if (pt) {
-      const geom = this.ghost.geometry as THREE.BoxGeometry;
-      this.ghost.position.set(pt.x, geom.parameters.height / 2, pt.z);
+      this.ghost.position.set(pt.x, def.size[1], pt.z);
     }
   }
 
-  /** Drop the ghost, attaching it to whatever part is under the pointer (or free-floating). */
+  /** Drop the ghost, attaching it to the snapped parent (or free-floating). */
   onPointerUp(ndc: THREE.Vector2): void {
     if (!this.ghost || !this.selectedPartId) return;
-    const snappedUid = this.pickPartUnder(ndc);
+    // Re-run snap so we have a fresh target even if pointermove missed the last tick.
+    const meshes = [...this.meshes.values()];
+    const snap = this.camera.pickSurface(meshes, ndc);
+    if (snap) this.snapTargetUid = (snap.object.userData.uid as string) ?? null;
     const uid = `u${this.uidCounter++}`;
     const placed: PlacedPart = {
       uid,
       partId: this.selectedPartId,
       position: this.ghost.position.clone(),
       rotation: this.ghost.rotation.clone(),
-      attachParentUid: snappedUid ?? undefined,
+      attachParentUid: this.snapTargetUid ?? undefined,
     };
     this.design.parts.push(placed);
     if (!this.design.rootPartUid && getPartDef(placed.partId).kind === 'pod') {
