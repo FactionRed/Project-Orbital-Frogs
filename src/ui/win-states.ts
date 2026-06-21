@@ -6,38 +6,53 @@ export type WinEvent = 'orbit' | 'moon-landed' | 'safe-return' | 'crash';
 
 export class WinStates {
   private banner: HTMLElement;
+  private bannerText: HTMLElement;
+  private bannerBtn: HTMLButtonElement;
   private achieved = new Set<WinEvent>();
   private wasInMoonSoi = false;
   private hideTimer = 0;
   onEvent: (e: WinEvent) => void = () => {};
+  onBuildAgain: () => void = () => {};
 
   constructor() {
     this.banner = document.createElement('div');
     this.banner.id = 'win-banner';
     Object.assign(this.banner.style, {
       position: 'absolute',
-      top: '20%',
+      top: '30%',
       left: '50%',
       transform: 'translateX(-50%)',
-      padding: '16px 32px',
-      background: 'rgba(0,40,0,0.9)',
+      padding: '20px 40px',
+      background: 'rgba(0,40,0,0.95)',
       color: '#9f9',
       fontFamily: 'sans-serif',
-      fontSize: '24px',
+      fontSize: '22px',
       borderRadius: '8px',
       display: 'none',
       zIndex: '30',
+      textAlign: 'center',
+      pointerEvents: 'auto',
     } as Partial<CSSStyleDeclaration>);
+    this.banner.innerHTML = `
+      <div id="banner-text"></div>
+      <button id="banner-btn" style="margin-top:12px;padding:8px 16px;background:#163;color:#cdd;border:1px solid #445;border-radius:4px;cursor:pointer;display:none">Build Again</button>
+    `;
     document.body.appendChild(this.banner);
+    this.bannerText = this.banner.querySelector('#banner-text')!;
+    this.bannerBtn = this.banner.querySelector('#banner-btn')!;
+    this.bannerBtn.addEventListener('click', () => this.onBuildAgain());
   }
 
-  private show(text: string): void {
-    this.banner.textContent = text;
+  private show(text: string, terminal = false): void {
+    this.bannerText.textContent = text;
     this.banner.style.display = 'block';
+    this.bannerBtn.style.display = terminal ? 'inline-block' : 'none';
     window.clearTimeout(this.hideTimer);
-    this.hideTimer = window.setTimeout(() => {
-      this.banner.style.display = 'none';
-    }, 4000);
+    if (!terminal) {
+      this.hideTimer = window.setTimeout(() => {
+        this.banner.style.display = 'none';
+      }, 4000);
+    }
   }
 
   update(flight: FlightController): void {
@@ -91,11 +106,11 @@ export class WinStates {
       }
     }
 
-    // Safe return: was on moon, now back near planet surface, slow touchdown.
+    // Safe return: terminal — was on moon, now back near planet surface, slow touchdown.
     if (this.wasInMoonSoi && !inMoonSoi && !this.achieved.has('safe-return')) {
       if (planetAlt < 10 && Math.hypot(v[0], v[1], v[2]) < 15) {
         this.achieved.add('safe-return');
-        this.show('🏆 Mission Complete! Safe Return.');
+        this.show('🏆 Mission Complete! Safe Return.', true);
         this.onEvent('safe-return');
       }
     }

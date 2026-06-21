@@ -82,6 +82,7 @@ const ui = new VabUi({
 const hud = new Hud();
 const orbitMap = new OrbitMap();
 const win = new WinStates();
+win.onBuildAgain = () => revertToVab();
 input.onPressed('KeyM', () => orbitMap.toggle());
 input.onPressed('F1', () => {
   if (fsm.current !== 'BUILD') revertToVab();
