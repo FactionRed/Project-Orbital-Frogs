@@ -1,50 +1,47 @@
 import { describe, it, expect } from 'vitest';
 import { orbitalEnergy, apoapsisPeriapsis, sphereOfInfluence } from '../src/physics/orbit-math';
+import { G, PLANET, MOON } from '../src/physics/constants';
 
 type V3 = [number, number, number];
 
+const MU = G * PLANET.mass; // gravitational parameter for Terra
+
 describe('orbitalEnergy', () => {
   it('is negative for a bound circular-ish orbit', () => {
-    const mu = 9.82 * 5e7; // G*M for Terra
-    const r: V3 = [400, 0, 0];
-    const v: V3 = [0, 0, 350]; // sub-orbital-ish speed
-    const e = orbitalEnergy(r, v, mu);
+    const r: V3 = [PLANET.radius + 100, 0, 0];
+    const v: V3 = [0, 0, 50]; // sub-orbital-ish speed
+    const e = orbitalEnergy(r, v, MU);
     expect(e).toBeLessThan(0);
   });
 });
 
 describe('apoapsisPeriapsis', () => {
   it('returns Ap > Pe and both > 0 for an elliptical orbit', () => {
-    const mu = 9.82 * 5e7;
-    const r: V3 = [400, 0, 0];
-    const v: V3 = [0, 0, 400];
-    const { apoapsis, periapsis } = apoapsisPeriapsis(r, v, mu);
+    const r: V3 = [PLANET.radius + 100, 0, 0];
+    const v: V3 = [0, 0, 60];
+    const { apoapsis, periapsis } = apoapsisPeriapsis(r, v, MU);
     expect(apoapsis).toBeGreaterThan(periapsis);
     expect(periapsis).toBeGreaterThan(0);
   });
 
   it('returns equal Ap and Pe for a circular orbit', () => {
-    const mu = 9.82 * 5e7;
-    const r: V3 = [400, 0, 0];
+    const r: V3 = [PLANET.radius + 100, 0, 0];
     // circular speed v = sqrt(mu / r)
-    const vc = Math.sqrt(mu / 400);
+    const vc = Math.sqrt(MU / (PLANET.radius + 100));
     const v: V3 = [0, 0, vc];
-    const { apoapsis, periapsis } = apoapsisPeriapsis(r, v, mu);
-    expect(apoapsis).toBeCloseTo(400, 1);
-    expect(periapsis).toBeCloseTo(400, 1);
+    const { apoapsis, periapsis } = apoapsisPeriapsis(r, v, MU);
+    expect(apoapsis).toBeCloseTo(PLANET.radius + 100, 1);
+    expect(periapsis).toBeCloseTo(PLANET.radius + 100, 1);
   });
 });
 
 describe('sphereOfInfluence', () => {
   it('Luna SOI is a sensible fraction of its orbit radius', () => {
-    const planetMass = 5e7;
-    const moonMass = 3e6;
-    const moonOrbitRadius = 4000;
-    const soi = sphereOfInfluence(moonOrbitRadius, moonMass, planetMass);
+    const soi = sphereOfInfluence(MOON.orbitRadius, MOON.mass, PLANET.mass);
     // formula: a * (m/m_parent)^(2/5)
-    const expected = 4000 * Math.pow(3e6 / 5e7, 0.4);
+    const expected = MOON.orbitRadius * Math.pow(MOON.mass / PLANET.mass, 0.4);
     expect(soi).toBeCloseTo(expected, 1);
     expect(soi).toBeGreaterThan(100);
-    expect(soi).toBeLessThan(moonOrbitRadius);
+    expect(soi).toBeLessThan(MOON.orbitRadius);
   });
 });

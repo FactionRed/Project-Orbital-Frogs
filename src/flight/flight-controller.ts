@@ -10,7 +10,9 @@ import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
 import { PLANET, MOON } from '../physics/constants';
 
-const FUEL_BURN_RATE = 0.01; // tuning: fuel units per (kN·s·throttle)
+// Tuned so one tank (400 fuel) at full throttle (one 40kN engine) burns for
+// ~30s: burn = 40 * 1 * dt * 0.33 ≈ 13.3 fuel/s → 400 / 13.3 ≈ 30s of thrust.
+const FUEL_BURN_RATE = 0.33;
 
 export class FlightController {
   readonly world = new CANNON.World();
