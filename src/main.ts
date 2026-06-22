@@ -6,6 +6,7 @@ import { VabCamera } from './building/vab-camera';
 import { VabController } from './building/vab-controller';
 import { VabUi } from './building/vab-ui';
 import { FlightController } from './flight/flight-controller';
+import { FlightCamera } from './flight/flight-camera';
 import { FlightControls } from './flight/controls';
 import { Hud } from './flight/hud';
 import { OrbitMap } from './ui/orbit-map';
@@ -39,15 +40,20 @@ vabCam.attach(renderer.domElement);
 // --- FLIGHT (added in M5) ---
 let flight: FlightController | null = null;
 let controls: FlightControls | null = null;
+let flightCam: FlightCamera | null = null;
 
 function launchFlight(design: ShipDesign) {
   if (flight) {
     scene.remove(flight.group);
+    scene.remove(flight.planet.mesh);
+    scene.remove(flight.moon.mesh);
   }
   vab.group.visible = false;
   ui.hide();
-  flight = new FlightController(design, scene, vabCam.camera);
+  flight = new FlightController(design, scene);
   controls = new FlightControls(input, flight);
+  flightCam = new FlightCamera(vabCam.camera);
+  flightCam.attach(renderer.domElement);
   hud.show();
   win.reset();
   fsm.transition('FLIGHT');
@@ -60,6 +66,10 @@ function revertToVab() {
     scene.remove(flight.moon.mesh);
     flight = null;
     controls = null;
+  }
+  if (flightCam) {
+    flightCam.detach();
+    flightCam = null;
   }
   vab.group.visible = true;
   ui.show();
@@ -137,9 +147,10 @@ input.onPressed('KeyH', () => {
 function animate() {
   requestAnimationFrame(animate);
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
-  if (fsm.current === 'FLIGHT' && flight && controls) {
+  if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {
     controls.update(1 / 60);
     flight.step(1 / 60);
+    flightCam.update(flight.ship.rootBody.position, flight.planet.position);
     hud.update(flight);
     orbitMap.draw(flight);
     win.update(flight);

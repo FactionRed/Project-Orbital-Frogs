@@ -29,7 +29,6 @@ export class FlightController {
   constructor(
     design: ShipDesign,
     scene: THREE.Scene,
-    private camera: THREE.PerspectiveCamera,
   ) {
     this.world.gravity.set(0, 0, 0);
     this.world.broadphase = new CANNON.NaiveBroadphase();
@@ -281,15 +280,5 @@ export class FlightController {
     const now = performance.now() / 1000;
     this.planet.update(now);
     this.moon.update(now);
-
-    // Chase camera follows root body.
-    const root = this.ship.rootBody;
-    const back = root.quaternion.vmult(new CANNON.Vec3(0, 3, -12));
-    this.camera.position.set(
-      root.position.x + back.x,
-      root.position.y + back.y,
-      root.position.z + back.z,
-    );
-    this.camera.lookAt(root.position.x, root.position.y, root.position.z);
   }
 }
