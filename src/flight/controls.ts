@@ -4,7 +4,9 @@ import type { Input } from '../core/input';
 import type { FlightController } from './flight-controller';
 
 const THROTTLE_RATE = 0.6; // per second
-const TORQUE = 12; // rotation response (bumped from 8 for responsiveness)
+// Manual rotation torque, scaled by mass so heavier ships get proportionally
+// more authority — and so SAS (also mass-scaled) can be overpowered when steering.
+const TORQUE_PER_TONNE = 16;
 
 export class FlightControls {
   constructor(private input: Input, private flight: FlightController) {
@@ -14,6 +16,9 @@ export class FlightControls {
     });
     input.onPressed('KeyX', () => {
       flight.throttle = 0;
+    });
+    input.onPressed('KeyT', () => {
+      flight.sasEnabled = !flight.sasEnabled;
     });
   }
 
@@ -26,15 +31,16 @@ export class FlightControls {
       this.flight.throttle = Math.max(0, this.flight.throttle - THROTTLE_RATE * dt);
 
     const root = this.flight.ship.rootBody;
+    const torque = root.mass * TORQUE_PER_TONNE;
     let tx = 0;
     let ty = 0;
     let tz = 0;
-    if (inp.isDown('KeyW')) tx -= TORQUE;
-    if (inp.isDown('KeyS')) tx += TORQUE;
-    if (inp.isDown('KeyA')) ty += TORQUE;
-    if (inp.isDown('KeyD')) ty -= TORQUE;
-    if (inp.isDown('KeyQ')) tz += TORQUE;
-    if (inp.isDown('KeyE')) tz -= TORQUE;
+    if (inp.isDown('KeyW')) tx -= torque;
+    if (inp.isDown('KeyS')) tx += torque;
+    if (inp.isDown('KeyA')) ty += torque;
+    if (inp.isDown('KeyD')) ty -= torque;
+    if (inp.isDown('KeyQ')) tz += torque;
+    if (inp.isDown('KeyE')) tz -= torque;
     if (tx || ty || tz) {
       const local = root.quaternion.vmult(new CANNON.Vec3(tx, ty, tz));
       root.torque.x += local.x;

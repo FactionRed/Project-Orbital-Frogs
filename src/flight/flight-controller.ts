@@ -21,6 +21,8 @@ export class FlightController {
   readonly moon: CelestialBody;
   readonly ship: BuiltShip;
   throttle = 0; // 0..1
+  /** Stability Assist (SAS) — when true, applies counter-torque to kill rotation. */
+  sasEnabled = false;
   private gravity: GravitySystem;
   private stageActive = true;
   private stages: Stage[] = [];
@@ -236,6 +238,22 @@ export class FlightController {
           sb.body.type = CANNON.Body.DYNAMIC;
           sb.body.wakeUp();
         }
+      }
+    }
+
+    // Stability Assist (SAS): apply counter-torque proportional to angular
+    // velocity so the ship resists rotation and holds attitude. The torque is
+    // scaled by mass + a gain so heavier ships get enough authority to stop
+    // their rotation (KSP scales SAS strength with vessel size similarly).
+    // This adds drag-like resistance but can be overpowered by W/S/A/D/Q/E.
+    if (this.sasEnabled) {
+      const root = this.ship.rootBody;
+      if (root.type === CANNON.Body.DYNAMIC) {
+        const SAS_GAIN = 8; // higher = snappier attitude hold
+        const authority = root.mass * SAS_GAIN;
+        root.torque.x -= root.angularVelocity.x * authority;
+        root.torque.y -= root.angularVelocity.y * authority;
+        root.torque.z -= root.angularVelocity.z * authority;
       }
     }
 

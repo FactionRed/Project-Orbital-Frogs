@@ -10,6 +10,7 @@ export class Hud {
   private fuel: HTMLElement;
   private throttleBar: HTMLElement;
   private soi: HTMLElement;
+  private sasIndicator: HTMLElement;
 
   constructor() {
     this.root = document.createElement('div');
@@ -22,6 +23,7 @@ export class Hud {
         <div class="row"><span class="label">Ap/Pe</span><span id="appe" class="val wide">-</span></div>
         <div class="row"><span class="label">FUEL</span><span id="fuel" class="val">0</span></div>
         <div class="row"><span class="label">SOI</span><span id="soi" class="val wide">-</span></div>
+        <div class="row"><span class="label">SAS</span><span id="sas" class="val wide" style="color:#777">OFF</span></div>
       </div>
     `;
     document.body.appendChild(this.root);
@@ -31,6 +33,7 @@ export class Hud {
     this.fuel = this.root.querySelector('#fuel')!;
     this.throttleBar = this.root.querySelector('#throttle-fill')!;
     this.soi = this.root.querySelector('#soi')!;
+    this.sasIndicator = this.root.querySelector('#sas')!;
   }
 
   update(flight: FlightController): void {
@@ -66,6 +69,15 @@ export class Hud {
       root.position.z - moonPos.z,
     );
     this.soi.textContent = md < 700 ? 'Luna' : 'Terra';
+
+    // SAS indicator: green when engaged, dim when off.
+    if (flight.sasEnabled) {
+      this.sasIndicator.textContent = 'ON';
+      this.sasIndicator.style.color = '#2a6';
+    } else {
+      this.sasIndicator.textContent = 'OFF';
+      this.sasIndicator.style.color = '#777';
+    }
   }
 
   show(): void {

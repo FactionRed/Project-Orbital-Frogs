@@ -135,7 +135,8 @@ hints.innerHTML = `
   <div>Q/E rotate · Del delete · Launch to fly</div>
   <h3>FLIGHT</h3>
   <div>Shift/Ctrl throttle · Z full · X cut · Space stage</div>
-  <div>W/S pitch · A/D yaw · Q/E roll · M map · F1 revert</div>
+  <div>W/S pitch · A/D yaw · Q/E roll · T stability assist</div>
+  <div>M map · F1 revert</div>
   <div style="margin-top:6px;color:#667">Press H to hide/show this help</div>
 `;
 document.body.appendChild(hints);
