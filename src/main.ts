@@ -96,7 +96,7 @@ const hud = new Hud();
 const orbitMap = new OrbitMap();
 const win = new WinStates();
 win.onBuildAgain = () => revertToVab();
-input.onPressed('KeyM', () => orbitMap.toggle());
+input.onPressed('KeyM', () => orbitMap.toggle(flight ?? undefined));
 input.onPressed('F1', () => {
   if (fsm.current !== 'BUILD') revertToVab();
 });
