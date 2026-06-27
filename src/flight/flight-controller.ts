@@ -8,7 +8,7 @@ import { CelestialBody } from '../physics/celestial-body';
 import { sphereOfInfluence } from '../physics/orbit-math';
 import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
-import { PLANET, MOON } from '../physics/constants';
+import { PLANET, MOON, SUN_DIRECTION } from '../physics/constants';
 
 // Tuned so one tank (400 fuel) at full throttle (one 40kN engine) burns for
 // ~30s: burn = 40 * 1 * dt * 0.33 ≈ 13.3 fuel/s → 400 / 13.3 ≈ 30s of thrust.
@@ -27,6 +27,8 @@ export class FlightController {
   sasEnabled = false;
   /** Attitude hold mode — actively points the nose at a computed direction. */
   holdMode: HoldMode = 'off';
+  /** Sun direction (body → sun), shared by both celestial bodies' shaders. */
+  private sunDir = new THREE.Vector3();
   private gravity: GravitySystem;
   private stageActive = true;
   private stages: Stage[] = [];
@@ -39,20 +41,35 @@ export class FlightController {
     this.world.gravity.set(0, 0, 0);
     this.world.broadphase = new CANNON.NaiveBroadphase();
 
-    this.planet = new CelestialBody({
-      name: PLANET.name,
-      radius: PLANET.radius,
-      mass: PLANET.mass,
-      color: PLANET.color,
-    });
+    this.sunDir.set(SUN_DIRECTION[0], SUN_DIRECTION[1], SUN_DIRECTION[2]).normalize();
+    this.planet = new CelestialBody(
+      {
+        name: PLANET.name,
+        radius: PLANET.radius,
+        mass: PLANET.mass,
+        color: PLANET.color,
+        kind: PLANET.kind,
+        seed: PLANET.seed,
+      },
+      { sunDirection: this.sunDir },
+    );
     this.moon = new CelestialBody(
-      { name: MOON.name, radius: MOON.radius, mass: MOON.mass, color: MOON.color },
-      { orbitsCenter: true, orbitRadius: MOON.orbitRadius, orbitPeriod: MOON.orbitPeriod },
+      {
+        name: MOON.name,
+        radius: MOON.radius,
+        mass: MOON.mass,
+        color: MOON.color,
+        kind: MOON.kind,
+        seed: MOON.seed,
+      },
+      { orbitsCenter: true, orbitRadius: MOON.orbitRadius, orbitPeriod: MOON.orbitPeriod, sunDirection: this.sunDir },
     );
     this.world.addBody(this.planet.cannonBody);
     this.world.addBody(this.moon.cannonBody);
     scene.add(this.planet.mesh);
+    if (this.planet.atmosphere) scene.add(this.planet.atmosphere);
     scene.add(this.moon.mesh);
+    if (this.moon.atmosphere) scene.add(this.moon.atmosphere);
 
     this.ship = buildShipPhysics(design);
     for (const sb of this.ship.shipBodies) this.world.addBody(sb.body);
@@ -400,5 +417,8 @@ export class FlightController {
     const now = performance.now() / 1000;
     this.planet.update(now);
     this.moon.update(now);
+    // Keep the day/night terminator + atmosphere sunlit-limb in sync.
+    this.planet.updateSun(this.sunDir);
+    this.moon.updateSun(this.sunDir);
   }
 }

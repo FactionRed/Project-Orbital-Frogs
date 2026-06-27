@@ -64,7 +64,9 @@ function launchFlight(design: ShipDesign) {
   if (flight) {
     scene.remove(flight.group);
     scene.remove(flight.planet.mesh);
+    if (flight.planet.atmosphere) scene.remove(flight.planet.atmosphere);
     scene.remove(flight.moon.mesh);
+    if (flight.moon.atmosphere) scene.remove(flight.moon.atmosphere);
   }
   vab.group.visible = false;
   ui.hide();
@@ -84,7 +86,9 @@ function revertToVab() {
   if (flight) {
     scene.remove(flight.group);
     scene.remove(flight.planet.mesh);
+    if (flight.planet.atmosphere) scene.remove(flight.planet.atmosphere);
     scene.remove(flight.moon.mesh);
+    if (flight.moon.atmosphere) scene.remove(flight.moon.atmosphere);
     flight = null;
     controls = null;
   }
