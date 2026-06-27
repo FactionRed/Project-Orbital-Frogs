@@ -31,6 +31,41 @@ Reach a closed orbit around Terra, transfer to Luna, land softly, lift off and
 return to Terra's surface, touching down safely. Banners mark each milestone;
 **🏆 Mission Complete** ends the run with a "Build Again" button.
 
+## Desktop build (standalone .exe)
+
+miniKSP can be packaged into a standalone Windows executable via Electron — no
+browser, Node, or install needed for the end user.
+
+```bash
+npm install
+npm run build:exe        # → release/miniKSP-<version>-portable.exe
+```
+
+The portable `.exe` runs by double-clicking. Requires Windows x64.
+
+### ⚠️ One-time setup: enable Developer Mode (Windows)
+
+On a default Windows install, `npm run build:exe` fails unpacking
+`electron-builder`'s code-signing toolchain with:
+
+```
+ERROR: Cannot create symbolic link : A required privilege is not held by the client
+```
+
+This is because the toolchain archive contains macOS symlinks that Windows
+won't let a non-admin process recreate. Fix it once:
+
+**Settings → System → For developers → Developer Mode → On**
+
+Then re-run `npm run build:exe`. (Alternatively, run the build from an
+Administrator terminal — that also grants the symlink privilege.)
+
+### Development with hot reload
+
+```bash
+npm run dev:electron      # launches the app in an Electron window with HMR
+```
+
 ## Design & implementation
 
 - Design spec: `docs/superpowers/specs/2026-06-21-miniksp-design.md`
