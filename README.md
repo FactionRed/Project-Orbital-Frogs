@@ -1,124 +1,76 @@
 # Project Orbital Frogs
 
-A super-basic 3D Kerbal Space Program prototype. Build a rocket in the VAB,
-launch it, reach orbit, transfer to the moon, land, and return safely.
+A 3D space flight game inspired by Kerbal Space Program. Build a rocket,
+launch it, reach orbit, fly to the moon, land, and come back alive.
 
-Runs in the browser or as a standalone Windows desktop app (Electron).
+## Quick Start
 
----
+**Easiest:** Download the `.exe` from [Releases](../../releases/latest) and
+double-click it. No install needed.
 
-## Install
+> Windows SmartScreen may warn — it's just unsigned. Click
+> **More info → Run anyway**.
 
-There are three ways to get Project Orbital Frogs running. Pick whichever fits.
-
-### Option A — Download the standalone .exe (easiest, no install)
-
-1. Go to the [Releases page](../../releases/latest).
-2. Download **`ProjectOrbitalFrogs-0.1.6-portable.exe`** (~71 MB).
-3. Double-click it. That's it — no Node, no browser, no install step.
-
-> The portable exe extracts to a temp folder on first run, so the first launch
-> takes a few seconds. Windows SmartScreen may warn about an unsigned download —
-> click **More info → Run anyway** (the exe is unsigned because code-signing
-> certificates cost money; this is normal for hobbyist projects).
-
-### Option B — Run from source (cross-platform, browser)
-
-Requires [Node.js 18+](https://nodejs.org/) and npm.
+**From source** (needs [Node.js 18+](https://nodejs.org/)):
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173
+Then open http://localhost:5173
 
-### Option C — Download the source zip + run locally
+## How to Play
 
-1. Go to the [Releases page](../../releases/latest).
-2. Download **`orbitalfrogs-0.1.6-source.zip`** and unzip it.
-3. In the unzipped folder:
+### Building a Rocket (VAB)
 
-```bash
-npm install
-npm run dev          # browser at http://localhost:5173
-```
+- Click a part on the left, then click in the scene to place it
+- **Right-drag** to orbit camera, **wheel** to zoom
+- `Q`/`E` rotate selected part · `Delete` to remove it
+- You need at least a **Command Pod** and an **Engine** to launch
+- Add **Fuel Tanks** for range and **Struts** to separate stages
 
----
+### Flying
 
-## Desktop build (build your own .exe)
+| Key | Action |
+|-----|--------|
+| `Shift`/`Ctrl` | Throttle up/down |
+| `Z`/`X` | Full / cut throttle |
+| `Space` | Stage (drop bottom stage) |
+| `W`/`S`/`A`/`D` | Pitch / yaw |
+| `Q`/`E` | Roll |
+| `T` | Stability Assist (SAS) |
+| `M` | Toggle orbit map |
+| `F1` | Back to VAB |
+| `H` | Toggle control hints |
 
-If you want to package the app into a standalone Windows executable yourself
-(instead of downloading the prebuilt one):
+The buttons beside the navball auto-point your ship at prograde, retrograde,
+normal, or anti-normal heading.
 
-```bash
-npm install
-npm run build:exe    # → release/ProjectOrbitalFrogs-<version>-portable.exe
-```
+### Goal
 
-### ⚠️ One-time setup: enable Developer Mode (Windows)
+Orbit Terra → transfer to Luna → land softly → lift off → return to Terra
+and touch down safely. Banners mark each milestone.
 
-On a default Windows install, `npm run build:exe` fails unpacking
-`electron-builder`'s code-signing toolchain with:
-
-```
-ERROR: Cannot create symbolic link : A required privilege is not held by the client
-```
-
-This is because the toolchain archive contains macOS symlinks that Windows
-won't let a non-admin process recreate. Fix it once:
-
-**Settings → System → For developers → Developer Mode → On**
-
-Then re-run `npm run build:exe`. (Alternatively, run the build from an
-Administrator terminal — that also grants the symlink privilege.)
-
-### Development with hot reload (Electron window)
+## Build Your Own .exe
 
 ```bash
-npm run dev:electron  # launches the app in an Electron window with HMR
+npm run build:exe
 ```
 
----
-
-## Controls
-
-**VAB (builder):** Click a part in the left palette, then click in the scene to
-place it. Right-drag to orbit the camera, mouse wheel to zoom. `Q`/`E` rotate the
-selected part, `Delete` removes it. A launchable design needs at least a Command
-Pod and an Engine; add Fuel Tanks for reaction mass and use Struts as decoupler
-joints between stages.
-
-**Flight:** `Shift`/`Ctrl` throttle up/down, `Z` full throttle, `X` cut, `Space`
-to stage (drops the bottom engine+tank stage). `W`/`S` pitch, `A`/`D` yaw,
-`Q`/`E` roll. `T` toggles Stability Assist (SAS). `M` toggles the orbit map,
-`F1` reverts to the VAB, `H` toggles the on-screen control hints.
-
-**Attitude autopilot:** the button panel beside the navball points the ship at
-prograde / retrograde / normal / anti-normal — click one and the ship rotates to
-that heading and holds it.
-
-**Map view (`M`):** left-drag rotates the 3D system view, wheel zooms, `M` closes.
-
-## Goal
-
-Reach a closed orbit around Terra, transfer to Luna, land softly, lift off and
-return to Terra's surface, touching down safely. Banners mark each milestone;
-**🏆 Mission Complete** ends the run with a "Build Again" button.
+> **Windows:** Enable **Developer Mode** first (Settings → System → For
+> Developers). Without it the build fails on symlink permissions.
 
 ## Tech
 
-Three.js (rendering) · cannon-es (physics) · simplex-noise (procedural terrain) ·
-Vite + TypeScript · Electron (desktop packaging) · Vitest (unit tests).
+Three.js · cannon-es · simplex-noise · Vite + TypeScript · Electron · Vitest
 
-## Design & implementation
+## For Developers
 
-- Design spec: `docs/superpowers/specs/2026-06-21-miniksp-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-06-21-miniksp.md`
-- Electron port plan: `docs/superpowers/plans/2026-06-26-electron-port.md`
+- [Design spec](docs/superpowers/specs/2026-06-21-miniksp-design.md)
+- [Implementation plan](docs/superpowers/plans/2026-06-21-miniksp.md)
+- [Electron port plan](docs/superpowers/plans/2026-06-26-electron-port.md)
 
-## Tuning note
-
-The physics constants in `src/physics/constants.ts` and the part stats in
-`src/entities/parts-catalog.ts` are tuned so a two-stage rocket can plausibly
-reach orbit and the moon. Adjust to taste — see spec §7 risk #4.
+Physics constants live in `src/physics/constants.ts` and part stats in
+`src/entities/parts-catalog.ts` — tuned for a two-stage rocket to reach orbit
+and the moon. Adjust to taste.
