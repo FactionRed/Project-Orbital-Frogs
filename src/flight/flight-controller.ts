@@ -394,7 +394,16 @@ export class FlightController {
     }
 
     this.gravity.applyGravity();
-    this.world.step(1 / 60, dt, 3);
+    // Simple-step cannon-es with the real delta time (no sub-stepping).
+    // Previously used world.step(1/60, dt, 3) which caused two problems:
+    //  1. internalStep() calls clearForces() at the end — so if 3 sub-steps
+    //     ran, only the first had our custom gravity; the other 2 had zero.
+    //  2. Variable sub-step counts per frame broke the symplectic property
+    //     of the leapfrog integrator, causing orbital energy drift.
+    // Simple mode (one arg) calls internalStep(dt) exactly once, so gravity
+    // is applied once and cleared once — consistent and stable.
+    // The dt is already capped at 1/60 in main.ts to keep integration accurate.
+    this.world.step(dt);
 
     // Sync meshes: each part's world transform = body transform * (localOffset, localQuat).
     for (const sb of this.ship.shipBodies) {

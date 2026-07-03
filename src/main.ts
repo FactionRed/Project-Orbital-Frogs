@@ -216,19 +216,27 @@ Object.assign(precisionIndicator.style, {
 document.body.appendChild(precisionIndicator);
 
 let lastFrameTime = performance.now();
+let physicsAccumulator = 0;
+const FIXED_DT = 1 / 60; // 60 Hz physics — stable for orbital mechanics
 function animate() {
   requestAnimationFrame(animate);
-  // Use the real delta time so physics runs at the correct rate on any
-  // monitor refresh rate (60Hz, 144Hz, etc.). Cap at 100ms to avoid
-  // huge jumps if the tab was backgrounded.
+  // Accumulate real time and step physics at a fixed 60 Hz. This ensures:
+  //  - Correct speed on any monitor (60Hz, 144Hz, etc.)
+  //  - Stable orbital integration (semi-implicit Euler is symplectic only
+  //    with a fixed, small timestep — variable dt causes energy drift)
+  //  - No huge jumps when tab is backgrounded (accumulator caps naturally)
   const now = performance.now();
-  const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+  physicsAccumulator += Math.min((now - lastFrameTime) / 1000, 0.1);
   lastFrameTime = now;
 
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
   if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {
-    controls.update(dt);
-    flight.step(dt);
+    // Step physics in fixed increments — may run 0, 1, or 2+ steps per frame.
+    while (physicsAccumulator >= FIXED_DT) {
+      controls.update(FIXED_DT);
+      flight.step(FIXED_DT);
+      physicsAccumulator -= FIXED_DT;
+    }
     // Flight camera and map camera share one camera object — only one may drive it.
     if (orbitMap.visible) {
       orbitMap.draw(flight);
