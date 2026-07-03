@@ -88,7 +88,7 @@ export class FlightCamera {
     // Smooth-follow the ship position (lerp so big jumps don't jolt the view).
     const desired = new THREE.Vector3(shipPos.x, shipPos.y, shipPos.z);
     if (this.targetPos.lengthSq() === 0) this.targetPos.copy(desired);
-    this.targetPos.lerp(desired, 0.3);
+    this.targetPos.lerp(desired, 0.5);
 
     // Local "up" = direction from planet center to the ship. This keeps the
     // horizon level as the ship flies around the planet (KSP behavior).

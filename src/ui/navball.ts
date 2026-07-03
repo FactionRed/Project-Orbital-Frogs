@@ -57,16 +57,19 @@ export class NavBall {
     ctx.clearRect(0, 0, s, s);
 
     const root = flight.ship.rootBody;
-    const planetCenter = flight.planet.position;
+    // Use dominant body center (not always planet) so the navball's "up" is
+    // correct when flying in the moon's SOI.
+    const domBody = flight.dominantBodyFor(root.position);
+    const bodyCenter = domBody.position;
 
     // Reference frame at the ship:
-    //   up    = unit(ship - planetCenter)
+    //   up    = unit(ship - bodyCenter)
     //   north = project world -Z onto the plane perpendicular to up (KSP-ish "north pole")
     //   east  = up × north
     const up3 = new THREE.Vector3(
-      root.position.x - planetCenter.x,
-      root.position.y - planetCenter.y,
-      root.position.z - planetCenter.z,
+      root.position.x - bodyCenter.x,
+      root.position.y - bodyCenter.y,
+      root.position.z - bodyCenter.z,
     ).normalize();
     const worldNorth = new THREE.Vector3(0, 1, 0); // planet's north pole axis
     // east = up × worldNorth (only valid when up isn't parallel to worldNorth)
@@ -168,8 +171,16 @@ export class NavBall {
     // Helper: project a world-direction into screen offset relative to disk center.
     const project = (dir: THREE.Vector3): { x: number; y: number } | null => {
       const dPitch = Math.asin(THREE.MathUtils.clamp(dir.dot(up3), -1, 1));
-      const dHoriz = dir.clone().sub(up3.clone().multiplyScalar(dir.dot(up3))).normalize();
-      const dHeading = Math.atan2(dHoriz.dot(east), dHoriz.dot(north));
+      const horizLen = dir.clone().sub(up3.clone().multiplyScalar(dir.dot(up3))).length();
+      // When dir is parallel to up3 (radial markers), horizontal component is
+      // zero — use a fallback heading so the marker still renders at top/bottom.
+      let dHeading: number;
+      if (horizLen < 1e-6) {
+        dHeading = headingRad; // aligned with up — no horizontal offset
+      } else {
+        const dHoriz = dir.clone().sub(up3.clone().multiplyScalar(dir.dot(up3))).normalize();
+        dHeading = Math.atan2(dHoriz.dot(east), dHoriz.dot(north));
+      }
       // Relative to nose direction:
       let rel = dHeading - headingRad;
       while (rel > Math.PI) rel -= 2 * Math.PI;

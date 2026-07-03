@@ -232,21 +232,27 @@ function animate() {
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
   if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {
     // Step physics in fixed increments — may run 0, 1, or 2+ steps per frame.
+    let physicsStepped = false;
     while (physicsAccumulator >= FIXED_DT) {
       controls.update(FIXED_DT);
       flight.step(FIXED_DT);
       physicsAccumulator -= FIXED_DT;
+      physicsStepped = true;
     }
-    // Flight camera and map camera share one camera object — only one may drive it.
-    if (orbitMap.visible) {
-      orbitMap.draw(flight);
-    } else {
-      flightCam.update(flight.ship.rootBody.position, flight.planet.position);
+    // Only update camera/HUD when physics actually advanced — prevents
+    // vibration from camera lerp running on frames with no position change.
+    if (physicsStepped) {
+      // Flight camera and map camera share one camera object — only one may drive it.
+      if (orbitMap.visible) {
+        orbitMap.draw(flight);
+      } else {
+        flightCam.update(flight.ship.rootBody.position, flight.planet.position);
+      }
+      hud.update(flight);
+      navball.update(flight);
+      holdPanel.setActive(flight.holdMode);
+      win.update(flight);
     }
-    hud.update(flight);
-    navball.update(flight);
-    holdPanel.setActive(flight.holdMode);
-    win.update(flight);
     precisionIndicator.style.display = controls.precisionMode ? 'block' : 'none';
   }
   renderer.render(scene, vabCam.camera);
