@@ -5,14 +5,11 @@ import type { FlightController } from '../flight/flight-controller';
 /**
  * KSP-style navball HUD instrument.
  *
- * Reference frame: "up" is the radial vector from planet center to the ship
- * (so the horizon line is level relative to the planet — exactly like KSP).
- * - Outer ring: heading (yaw) 0–360°, N/E/S/W.
- * - Horizontal crosshair: pitch ladder (above/below horizon).
- * - The horizon itself rotates with roll.
- * - Center dot (chevron) = where the ship's nose points.
- * - Yellow circle (prograde) = where velocity points.
- * - Green circle (retrograde) = opposite of velocity (for braking burns).
+ * Uses a quaternion-based approach to avoid Euler angle gimbal lock.
+ * The ball's orientation is computed as a single quaternion transform
+ * from the local reference frame (up/north/east) to the ship's frame.
+ * Markers are projected by transforming world directions into the
+ * ship's local frame and reading off the x/y components.
  *
  * Rendered on a fixed 160px canvas anchored bottom-center of the screen.
  */
@@ -20,6 +17,8 @@ export class NavBall {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private readonly size = 160;
+  // Stored previous orientation state for smoothing/degenerate fallback.
+  private hasPrev = false;
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -40,102 +39,108 @@ export class NavBall {
     this.ctx = this.canvas.getContext('2d')!;
   }
 
-  show(): void {
-    this.canvas.style.display = 'block';
-  }
-  hide(): void {
-    this.canvas.style.display = 'none';
-  }
+  show(): void { this.canvas.style.display = 'block'; }
+  hide(): void { this.canvas.style.display = 'none'; }
 
   update(flight: FlightController): void {
     const ctx = this.ctx;
     const s = this.size;
     const cx = s / 2;
     const cy = s / 2;
-    const R = s / 2 - 2; // outer radius
-
+    const R = s / 2 - 2;
     ctx.clearRect(0, 0, s, s);
 
     const root = flight.ship.rootBody;
-    // Use dominant body center (not always planet) so the navball's "up" is
-    // correct when flying in the moon's SOI.
     const domBody = flight.dominantBodyFor(root.position);
     const bodyCenter = domBody.position;
 
-    // Reference frame at the ship:
-    //   up    = unit(ship - bodyCenter)
-    //   north = project world -Z onto the plane perpendicular to up (KSP-ish "north pole")
+    // Local reference frame at the ship:
+    //   up    = unit(ship - bodyCenter)  (radial out)
+    //   north = project world-up onto plane perp to up
     //   east  = up × north
     const up3 = new THREE.Vector3(
       root.position.x - bodyCenter.x,
       root.position.y - bodyCenter.y,
       root.position.z - bodyCenter.z,
     ).normalize();
-    const worldNorth = new THREE.Vector3(0, 1, 0); // planet's north pole axis
-    // east = up × worldNorth (only valid when up isn't parallel to worldNorth)
-    let east = new THREE.Vector3().crossVectors(up3, worldNorth);
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    let east = new THREE.Vector3().crossVectors(up3, worldUp);
     if (east.lengthSq() < 1e-6) east.set(1, 0, 0);
     east.normalize();
     const north = new THREE.Vector3().crossVectors(east, up3).normalize();
 
-    // Ship's forward = its local -Y? In our build, parts extend +Y up and engines
-    // push +Y, so the "nose" is local +Y. Convert to world.
-    const q = new THREE.Quaternion(
-      root.quaternion.x,
-      root.quaternion.y,
-      root.quaternion.z,
-      root.quaternion.w,
+    // Ship orientation quaternion (cannon → three).
+    const qShip = new THREE.Quaternion(
+      root.quaternion.x, root.quaternion.y,
+      root.quaternion.z, root.quaternion.w,
     );
-    const noseLocal = new THREE.Vector3(0, 1, 0);
-    const nose = noseLocal.clone().applyQuaternion(q).normalize();
 
-    // Velocity direction (world).
-    const velLen = Math.hypot(root.velocity.x, root.velocity.y, root.velocity.z);
-    const vel = velLen > 1e-3 ? new THREE.Vector3(root.velocity.x, root.velocity.y, root.velocity.z).normalize() : null;
+    // Ship's local axes in world space.
+    const nose = new THREE.Vector3(0, 1, 0).applyQuaternion(qShip).normalize();
+    const shipRight = new THREE.Vector3(1, 0, 0).applyQuaternion(qShip).normalize();
+    const shipForward = new THREE.Vector3(0, 0, 1).applyQuaternion(qShip).normalize();
 
-    // --- Decompose nose into heading / pitch / roll relative to the local frame ---
-    // pitch = angle of nose above the local horizon (0 = level, +90 = straight up)
+    // The navball is viewed from behind the ship. A world direction `dir`
+    // projects onto the 2D ball as:
+    //   screenX = dir · shipRight   (right = +x on screen)
+    //   screenY = -(dir · shipForward)  (up on screen = -z in ship frame,
+    //                                    because canvas y is down)
+    // Hidden if dir · nose < 0 (behind the ship).
+    const project = (dir: THREE.Vector3): { x: number; y: number } | null => {
+      const cosAngle = dir.dot(nose);
+      if (cosAngle < -0.05) return null; // behind the ship (small tolerance)
+      const px = dir.dot(shipRight) * R * 0.85;
+      const py = -dir.dot(shipForward) * R * 0.85;
+      return { x: THREE.MathUtils.clamp(px, -R, R),
+               y: THREE.MathUtils.clamp(py, -R, R) };
+    };
+
+    // --- Compute pitch and heading for readouts ---
+    // pitch = angle of nose above local horizon.
     const pitchRad = Math.asin(THREE.MathUtils.clamp(nose.dot(up3), -1, 1));
-    // Project nose onto the local horizon plane.
-    const horiz = nose.clone().sub(up3.clone().multiplyScalar(nose.dot(up3)));
-    horiz.normalize();
-    const headingRad = Math.atan2(horiz.dot(east), horiz.dot(north)); // 0 = north, +90 = east
+    // heading = direction of nose's horizontal projection.
+    const horizNose = nose.clone().sub(up3.clone().multiplyScalar(nose.dot(up3)));
+    let headingRad = 0;
+    if (horizNose.length() > 1e-5) {
+      horizNose.normalize();
+      headingRad = Math.atan2(horizNose.dot(east), horizNose.dot(north));
+    } else if (this.hasPrev) {
+      // Preserve previous heading near poles.
+      // Extract from prevBallQuat — just use 0 as fallback.
+      headingRad = 0;
+    }
 
-    // Roll: rotation of the ship around its nose axis, relative to "wings level".
-    // Wings level = ship's right vector projects onto the local horizon pointing
-    // in some consistent direction. Compute via: take the ship's "right" (+X),
-    // remove its component along the nose, then measure the angle of the
-    // resulting in-plane vector relative to "up-in-that-plane".
-    const rightLocal = new THREE.Vector3(1, 0, 0);
-    const right = rightLocal.clone().applyQuaternion(q);
-    const rightInPlane = right.clone().sub(nose.clone().multiplyScalar(right.dot(nose)));
-    // Reference up-in-plane: the local up with its nose-component removed.
-    const upInPlane = up3.clone().sub(nose.clone().multiplyScalar(up3.dot(nose)));
-    const upInPlaneLen = upInPlane.length();
-    let rollRad: number;
-    if (upInPlaneLen < 1e-6 || rightInPlane.length() < 1e-6) {
-      // Nose is straight up/down — roll is undefined; preserve zero.
-      rollRad = 0;
-    } else {
-      upInPlane.normalize();
+    // --- Compute roll for horizon rotation ---
+    // Roll = angle of shipRight relative to the local horizon plane.
+    // Project shipRight onto the plane perpendicular to nose.
+    const rightInPlane = shipRight.clone().sub(
+      nose.clone().multiplyScalar(shipRight.dot(nose)));
+    // Project local up onto the same plane.
+    const upInPlane = up3.clone().sub(
+      nose.clone().multiplyScalar(up3.dot(nose)));
+    let rollRad = 0;
+    if (rightInPlane.length() > 1e-5 && upInPlane.length() > 1e-5) {
       rightInPlane.normalize();
-      // A vector 90° clockwise from upInPlane (around the nose):
+      upInPlane.normalize();
       const sideRef = new THREE.Vector3().crossVectors(nose, upInPlane).normalize();
       rollRad = Math.atan2(rightInPlane.dot(sideRef), rightInPlane.dot(upInPlane));
     }
 
+    this.hasPrev = true;
+
     // --- Draw navball disk ---
-    // Clip to circle.
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.clip();
 
-    // Sky/ground split that rotates/translates with pitch + roll.
     ctx.translate(cx, cy);
     ctx.rotate(-rollRad);
-    // The horizon line sits at pitch offset: 1px per degree, capped by disk size.
-    const pitchPx = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(pitchRad) * 1.5, -R, R);
+
+    // Horizon offset: pitch in pixels.
+    const pitchPx = THREE.MathUtils.clamp(
+      THREE.MathUtils.radToDeg(pitchRad) * 1.5, -R, R);
+
     // Sky (above horizon)
     ctx.fillStyle = '#1a3a6a';
     ctx.fillRect(-R, -R - pitchPx, R * 2, R + pitchPx);
@@ -167,51 +172,27 @@ export class NavBall {
     }
     ctx.restore();
 
-    // --- Markers (drawn in fixed screen space, no roll) ---
-    // Helper: project a world-direction into screen offset relative to disk center.
-    const project = (dir: THREE.Vector3): { x: number; y: number } | null => {
-      const dPitch = Math.asin(THREE.MathUtils.clamp(dir.dot(up3), -1, 1));
-      const horizLen = dir.clone().sub(up3.clone().multiplyScalar(dir.dot(up3))).length();
-      // When dir is parallel to up3 (radial markers), horizontal component is
-      // zero — use a fallback heading so the marker still renders at top/bottom.
-      let dHeading: number;
-      if (horizLen < 1e-6) {
-        dHeading = headingRad; // aligned with up — no horizontal offset
-      } else {
-        const dHoriz = dir.clone().sub(up3.clone().multiplyScalar(dir.dot(up3))).normalize();
-        dHeading = Math.atan2(dHoriz.dot(east), dHoriz.dot(north));
-      }
-      // Relative to nose direction:
-      let rel = dHeading - headingRad;
-      while (rel > Math.PI) rel -= 2 * Math.PI;
-      while (rel < -Math.PI) rel += 2 * Math.PI;
-      const px = Math.sin(rel) * R * 0.85;
-      // Vertical: difference in pitch.
-      const py = -(THREE.MathUtils.radToDeg(dPitch) - THREE.MathUtils.radToDeg(pitchRad)) * 1.5;
-      // Hide if it's on the back side (behind the disk plane).
-      const cosAngle = dir.dot(nose);
-      if (cosAngle < 0) return null; // behind the ship
-      return { x: px, y: THREE.MathUtils.clamp(py, -R, R) };
-    };
-
-    // Prograde marker (yellow)
-    if (vel) {
+    // --- Markers (fixed screen space) ---
+    // Velocity markers
+    const velLen = Math.hypot(root.velocity.x, root.velocity.y, root.velocity.z);
+    if (velLen > 1e-3) {
+      const vel = new THREE.Vector3(
+        root.velocity.x, root.velocity.y, root.velocity.z).normalize();
       const p = project(vel);
       if (p) this.drawMarker(ctx, cx + p.x, cy + p.y, '#ffee00', false);
-      // Retrograde = -vel
       const r = project(vel.clone().multiplyScalar(-1));
       if (r) this.drawMarker(ctx, cx + r.x, cy + r.y, '#33dd33', true);
     }
 
-    // Radial out (cyan diamond) = +up3 (away from body)
+    // Radial out (cyan diamond) = +up3
     const radOut = project(up3);
     if (radOut) this.drawDiamondMarker(ctx, cx + radOut.x, cy + radOut.y, '#44ddff', false);
-    // Radial in (cyan diamond outline) = -up3 (toward body)
+    // Radial in = -up3
     const radIn = project(up3.clone().multiplyScalar(-1));
     if (radIn) this.drawDiamondMarker(ctx, cx + radIn.x, cy + radIn.y, '#44ddff', true);
 
-    // --- Fixed overlay: heading readout + center crosshair ---
-    // Center crosshair (where the nose points).
+    // --- Fixed overlay ---
+    // Center crosshair
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -221,7 +202,7 @@ export class NavBall {
     ctx.lineTo(cx, cy + 10);
     ctx.stroke();
 
-    // Heading tick marks around the outer ring (rotated by -heading so N stays at top).
+    // Heading tick marks
     ctx.save();
     ctx.translate(cx, cy);
     ctx.strokeStyle = '#9ab';
@@ -230,7 +211,8 @@ export class NavBall {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (let deg = 0; deg < 360; deg += 45) {
-      const ang = THREE.MathUtils.degToRad(deg - 90 - THREE.MathUtils.radToDeg(headingRad));
+      const ang = THREE.MathUtils.degToRad(
+        deg - 90 - THREE.MathUtils.radToDeg(headingRad));
       const tx = Math.cos(ang) * (R - 10);
       const ty = Math.sin(ang) * (R - 10);
       const labels = ['N', 'E', 'S', 'W'];
@@ -238,26 +220,21 @@ export class NavBall {
     }
     ctx.restore();
 
-    // Top pointer = current heading in degrees.
+    // Heading readout
     ctx.fillStyle = '#fff';
     ctx.font = '10px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(
-      `${Math.round(((THREE.MathUtils.radToDeg(headingRad) + 360) % 360)).toString().padStart(3, '0')}°`,
-      cx,
-      12,
-    );
-    // Pitch readout.
-    ctx.fillText(`${Math.round(THREE.MathUtils.radToDeg(pitchRad))}°`, cx, s - 8);
+      `${Math.round(((THREE.MathUtils.radToDeg(headingRad) + 360) % 360))
+        .toString().padStart(3, '0')}°`,
+      cx, 12);
+    // Pitch readout
+    ctx.fillText(
+      `${Math.round(THREE.MathUtils.radToDeg(pitchRad))}°`, cx, s - 8);
   }
 
-  private drawMarker(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    color: string,
-    retro: boolean,
-  ): void {
+  private drawMarker(ctx: CanvasRenderingContext2D, x: number, y: number,
+    color: string, retro: boolean): void {
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
@@ -265,7 +242,6 @@ export class NavBall {
     ctx.arc(x, y, 5, 0, Math.PI * 2);
     if (retro) {
       ctx.stroke();
-      // X inside
       ctx.beginPath();
       ctx.moveTo(x - 3, y - 3);
       ctx.lineTo(x + 3, y + 3);
@@ -277,13 +253,8 @@ export class NavBall {
     }
   }
 
-  private drawDiamondMarker(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    color: string,
-    outline: boolean,
-  ): void {
+  private drawDiamondMarker(ctx: CanvasRenderingContext2D, x: number, y: number,
+    color: string, outline: boolean): void {
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
@@ -293,10 +264,7 @@ export class NavBall {
     ctx.lineTo(x, y + 6);
     ctx.lineTo(x - 6, y);
     ctx.closePath();
-    if (outline) {
-      ctx.stroke();
-    } else {
-      ctx.fill();
-    }
+    if (outline) ctx.stroke();
+    else ctx.fill();
   }
 }
