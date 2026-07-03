@@ -16,9 +16,9 @@ export class FlightCamera {
   /** Azimuth around the local-up axis, in radians. */
   private azimuth = Math.PI;
   /** Pitch above the local horizon, in radians (clamped). */
-  private pitch = 0.5;
+  private pitch = 0.35;
   /** Distance from the ship, in meters. */
-  private distance = 25;
+  private distance = 35;
   private readonly minDistance = 6;
   private readonly maxDistance = 1500; // must exceed planet radius (300m)
 

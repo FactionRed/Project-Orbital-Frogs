@@ -3,12 +3,15 @@ import * as CANNON from 'cannon-es';
 import type { Input } from '../core/input';
 import type { FlightController } from './flight-controller';
 
-const THROTTLE_RATE = 0.6; // per second
+const THROTTLE_RATE = 0.8; // per second
 // Manual rotation torque, scaled by mass so heavier ships get proportionally
 // more authority — and so SAS (also mass-scaled) can be overpowered when steering.
 const TORQUE_PER_TONNE = 16;
 
 export class FlightControls {
+  /** Precision mode: halves torque for fine attitude adjustments. */
+  precisionMode = false;
+
   constructor(private input: Input, private flight: FlightController) {
     input.onPressed('Space', () => this.stage());
     input.onPressed('KeyZ', () => {
@@ -20,18 +23,29 @@ export class FlightControls {
     input.onPressed('KeyT', () => {
       flight.sasEnabled = !flight.sasEnabled;
     });
+    input.onPressed('CapsLock', () => {
+      this.precisionMode = !this.precisionMode;
+    });
   }
 
   /** Apply per-frame input: throttle ramp, rotation torque on root body. */
   update(dt: number): void {
     const inp = this.input;
+
+    // F-key SAS override: while held, suppress SAS for manual input.
+    flight_param: {
+      this.flight.sasHeld = inp.isDown('KeyF');
+    }
+
     if (inp.isDown('ShiftLeft'))
       this.flight.throttle = Math.min(1, this.flight.throttle + THROTTLE_RATE * dt);
     if (inp.isDown('ControlLeft'))
       this.flight.throttle = Math.max(0, this.flight.throttle - THROTTLE_RATE * dt);
 
     const root = this.flight.ship.rootBody;
-    const torque = root.mass * TORQUE_PER_TONNE;
+    let torque = root.mass * TORQUE_PER_TONNE;
+    if (this.precisionMode) torque *= 0.5;
+
     let tx = 0;
     let ty = 0;
     let tz = 0;

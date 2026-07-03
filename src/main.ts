@@ -186,6 +186,7 @@ hints.innerHTML = `
   <h3>FLIGHT</h3>
   <div>Shift/Ctrl throttle · Z full · X cut · Space stage</div>
   <div>W/S pitch · A/D yaw · Q/E roll · T stability assist</div>
+  <div>F hold = override SAS · CapsLock = precision mode</div>
   <div>M map (drag rotate · wheel zoom) · F1 revert</div>
   <div style="margin-top:6px;color:#667">Press H to hide/show this help</div>
 `;
@@ -194,6 +195,25 @@ hints.style.display = 'block';
 input.onPressed('KeyH', () => {
   hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
 });
+
+// Precision mode indicator (shown when CapsLock toggles precision controls on).
+const precisionIndicator = document.createElement('div');
+precisionIndicator.id = 'precision-indicator';
+precisionIndicator.textContent = 'PRECISION';
+Object.assign(precisionIndicator.style, {
+  position: 'absolute' as const,
+  top: '12px',
+  right: '12px',
+  color: '#44ddff',
+  font: 'bold 11px monospace',
+  background: 'rgba(0,20,40,0.7)',
+  border: '1px solid #44ddff',
+  borderRadius: '3px',
+  padding: '3px 8px',
+  zIndex: '15',
+  display: 'none',
+} as Partial<CSSStyleDeclaration>);
+document.body.appendChild(precisionIndicator);
 
 let lastFrameTime = performance.now();
 function animate() {
@@ -219,6 +239,7 @@ function animate() {
     navball.update(flight);
     holdPanel.setActive(flight.holdMode);
     win.update(flight);
+    precisionIndicator.style.display = controls.precisionMode ? 'block' : 'none';
   }
   renderer.render(scene, vabCam.camera);
   input.endFrame();

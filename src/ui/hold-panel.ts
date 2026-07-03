@@ -34,7 +34,7 @@ export class HoldPanel {
       borderRadius: '6px',
       zIndex: '15',
       // Sit the panel to the LEFT of the navball (which is also bottom-center).
-      marginRight: '180px',
+      marginRight: '220px',
     } as Partial<CSSStyleDeclaration>);
     document.body.appendChild(this.root);
 
@@ -43,6 +43,8 @@ export class HoldPanel {
       { mode: 'retrograde', glyph: '⊘', color: '#ffd700', title: 'Retrograde' },
       { mode: 'normal', glyph: '▲', color: '#cc77ff', title: 'Normal' },
       { mode: 'antinormal', glyph: '▼', color: '#cc77ff', title: 'Anti-normal' },
+      { mode: 'radialin', glyph: '◉', color: '#44ddff', title: 'Radial In' },
+      { mode: 'radialout', glyph: '◎', color: '#44ddff', title: 'Radial Out' },
     ];
     for (const d of defs) {
       const btn = document.createElement('button');

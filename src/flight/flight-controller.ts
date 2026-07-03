@@ -14,7 +14,7 @@ import { PLANET, MOON, SUN_DIRECTION } from '../physics/constants';
 // ~30s: burn = 40 * 1 * dt * 0.33 ≈ 13.3 fuel/s → 400 / 13.3 ≈ 30s of thrust.
 const FUEL_BURN_RATE = 0.33;
 
-export type HoldMode = 'off' | 'prograde' | 'retrograde' | 'normal' | 'antinormal';
+export type HoldMode = 'off' | 'prograde' | 'retrograde' | 'normal' | 'antinormal' | 'radialin' | 'radialout';
 
 export class FlightController {
   readonly world = new CANNON.World();
@@ -24,7 +24,9 @@ export class FlightController {
   readonly ship: BuiltShip;
   throttle = 0; // 0..1
   /** Stability Assist (SAS) — when true, applies counter-torque to kill rotation. */
-  sasEnabled = false;
+  sasEnabled = true;
+  /** When true, SAS is temporarily suppressed (F-key override). */
+  sasHeld = false;
   /** Attitude hold mode — actively points the nose at a computed direction. */
   holdMode: HoldMode = 'off';
   /** Sun direction (body → sun), shared by both celestial bodies' shaders. */
@@ -165,6 +167,14 @@ export class FlightController {
       tx = (s * vx) / vLen;
       ty = (s * vy) / vLen;
       tz = (s * vz) / vLen;
+    } else if (this.holdMode === 'radialin' || this.holdMode === 'radialout') {
+      // Radial = ±r̂ (unit vector from dominant body center to ship).
+      // radialout = +r̂ (away from body, "up" on navball blue hemisphere)
+      // radialin  = −r̂ (toward body, "down" on navball brown hemisphere)
+      const s = this.holdMode === 'radialout' ? 1 : -1;
+      tx = (s * rx) / rLen;
+      ty = (s * ry) / rLen;
+      tz = (s * rz) / rLen;
     } else {
       // normal / antinormal — from orbital angular momentum h = r × v
       const hx = ry * vz - rz * vy;
@@ -215,8 +225,8 @@ export class FlightController {
 
     // PD torque: proportional to rotation error axis (× mass × gain) +
     // derivative damping on angular velocity (× mass × damping gain).
-    const HOLD_GAIN = 25; // proportional — higher = snappier
-    const HOLD_DAMP = 12; // derivative — higher = less overshoot
+    const HOLD_GAIN = 20; // proportional — higher = snappier
+    const HOLD_DAMP = 16; // derivative — higher = less overshoot
     const authority = root.mass;
     root.torque.x += ax * authority * HOLD_GAIN - root.angularVelocity.x * authority * HOLD_DAMP;
     root.torque.y += ay * authority * HOLD_GAIN - root.angularVelocity.y * authority * HOLD_DAMP;
@@ -357,10 +367,10 @@ export class FlightController {
     //   just damp rotation to hold current attitude.
     if (this.holdMode !== 'off') {
       this.applyAttitudeHold();
-    } else if (this.sasEnabled) {
+    } else if (this.sasEnabled && !this.sasHeld) {
       const root = this.ship.rootBody;
       if (root.type === CANNON.Body.DYNAMIC) {
-        const SAS_GAIN = 8; // higher = snappier attitude hold
+        const SAS_GAIN = 5; // gentle damping — doesn't fight manual steering
         const authority = root.mass * SAS_GAIN;
         root.torque.x -= root.angularVelocity.x * authority;
         root.torque.y -= root.angularVelocity.y * authority;

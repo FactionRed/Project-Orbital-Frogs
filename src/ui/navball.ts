@@ -192,6 +192,13 @@ export class NavBall {
       if (r) this.drawMarker(ctx, cx + r.x, cy + r.y, '#33dd33', true);
     }
 
+    // Radial out (cyan diamond) = +up3 (away from body)
+    const radOut = project(up3);
+    if (radOut) this.drawDiamondMarker(ctx, cx + radOut.x, cy + radOut.y, '#44ddff', false);
+    // Radial in (cyan diamond outline) = -up3 (toward body)
+    const radIn = project(up3.clone().multiplyScalar(-1));
+    if (radIn) this.drawDiamondMarker(ctx, cx + radIn.x, cy + radIn.y, '#44ddff', true);
+
     // --- Fixed overlay: heading readout + center crosshair ---
     // Center crosshair (where the nose points).
     ctx.strokeStyle = '#fff';
@@ -253,6 +260,29 @@ export class NavBall {
       ctx.lineTo(x + 3, y + 3);
       ctx.moveTo(x + 3, y - 3);
       ctx.lineTo(x - 3, y + 3);
+      ctx.stroke();
+    } else {
+      ctx.fill();
+    }
+  }
+
+  private drawDiamondMarker(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    color: string,
+    outline: boolean,
+  ): void {
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 6);
+    ctx.lineTo(x + 6, y);
+    ctx.lineTo(x, y + 6);
+    ctx.lineTo(x - 6, y);
+    ctx.closePath();
+    if (outline) {
       ctx.stroke();
     } else {
       ctx.fill();

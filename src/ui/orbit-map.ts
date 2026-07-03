@@ -2,30 +2,33 @@
 import * as THREE from 'three';
 import type { FlightController } from '../flight/flight-controller';
 
-const TRAJECTORY_STEPS = 1000;
+const TRAJECTORY_STEPS = 1500;
 const TRAJECTORY_DT = 0.5;
 
 /**
- * 3D orbital map view.
+ * 3D orbital map view — player-centered.
  *
- * When open, the camera pulls back to show the whole system and you orbit it
- * with the mouse (left-drag rotates, wheel zooms). The predicted trajectory is
- * drawn as a 3D line in the scene. A small DOM overlay shows help text and the
- * Ap/Pe readout. Closes with M.
+ * The camera follows the ship's position and orbits around it. The planet,
+ * moon, and trajectory are drawn in world space. A ship marker (cyan dot)
+ * marks the vessel, and Ap/Pe markers appear on the trajectory line itself.
  *
- * This replaces the earlier 2D top-down canvas — the game is 3D, so maneuvers
- * out of the XZ plane were unreadable.
+ * Left-drag rotates, wheel zooms, M closes.
  */
 export class OrbitMap {
   visible = false;
   private overlay: HTMLElement;
   private apPeText: HTMLElement;
   private trajectoryLine: THREE.Line | null = null;
+  private apMarker: THREE.Mesh | null = null;
+  private peMarker: THREE.Mesh | null = null;
+  private shipMarker: THREE.Mesh | null = null;
 
   // Map camera state (separate from flight camera).
   private mapAzimuth = Math.PI / 4;
   private mapPitch = Math.PI / 6;
-  private mapDistance = 8000;
+  private mapDistance = 3000;
+  private readonly minDistance = 200;
+  private readonly maxDistance = 20000;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
@@ -37,21 +40,20 @@ export class OrbitMap {
       position: 'absolute',
       left: '12px',
       top: '12px',
-      background: 'rgba(0,0,10,0.78)',
-      color: '#cdd',
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      padding: '8px 12px',
-      borderRadius: '6px',
-      border: '1px solid #2a3550',
-      display: 'none',
+      color: '#8fa',
+      font: '12px monospace',
+      background: 'rgba(0,0,10,0.7)',
+      border: '1px solid #2a4',
+      borderRadius: '4px',
+      padding: '6px 10px',
       zIndex: '20',
+      display: 'none',
       pointerEvents: 'none',
-      lineHeight: '1.6',
     } as Partial<CSSStyleDeclaration>);
     this.overlay.innerHTML = `
-      <div id="map-appe" style="color:#9cf;margin-bottom:4px">Ap - / Pe -</div>
-      <div id="map-help" style="color:#7a8aa5">MAP · drag rotate · wheel zoom · M close</div>
+      <div id="map-title" style="color:#8fa;font-weight:bold;margin-bottom:4px">MAP — following ship</div>
+      <div id="map-appe" style="color:#ffd700">Ap/Pe: —</div>
+      <div id="map-help" style="color:#7a8aa5">drag rotate · wheel zoom · M close</div>
     `;
     document.body.appendChild(this.overlay);
     this.apPeText = this.overlay.querySelector('#map-appe')!;
@@ -87,7 +89,7 @@ export class OrbitMap {
     };
     this.onWheel = (e: WheelEvent) => {
       const factor = e.deltaY < 0 ? 1 / 1.15 : 1.15;
-      this.mapDistance = Math.max(500, Math.min(20000, this.mapDistance * factor));
+      this.mapDistance = Math.max(this.minDistance, Math.min(this.maxDistance, this.mapDistance * factor));
       e.preventDefault();
     };
     dom.addEventListener('pointerdown', this.onDown);
@@ -109,11 +111,18 @@ export class OrbitMap {
     if (this.visible) {
       this.overlay.style.display = 'block';
       this.attachControls(dom);
-      if (flight) this.recomputeTrajectory(flight);
+      if (flight) {
+        this.recomputeTrajectory(flight);
+        this.createShipMarker();
+        // Snap initial distance to something sensible based on ship altitude.
+        const shipPos = flight.ship.rootBody.position;
+        const alt = Math.hypot(shipPos.x, shipPos.y, shipPos.z);
+        this.mapDistance = Math.max(800, Math.min(this.maxDistance, alt * 3));
+      }
     } else {
       this.overlay.style.display = 'none';
       this.detachControls();
-      this.clearTrajectory();
+      this.clearAll();
     }
   }
 
@@ -122,7 +131,7 @@ export class OrbitMap {
     this.visible = false;
     this.overlay.style.display = 'none';
     this.detachControls();
-    this.clearTrajectory();
+    this.clearAll();
   }
 
   /** Recompute trajectory + position the camera. Called each frame while open. */
@@ -131,14 +140,19 @@ export class OrbitMap {
     this.recomputeTrajectory(flight);
     this.updateOverlay(flight);
 
-    // Orbit the camera around the planet (system origin) using spherical coords.
-    // Use world-up so the map view doesn't inherit the flight camera's radial up.
-    const x = Math.cos(this.mapPitch) * Math.cos(this.mapAzimuth) * this.mapDistance;
-    const y = Math.sin(this.mapPitch) * this.mapDistance;
-    const z = Math.cos(this.mapPitch) * Math.sin(this.mapAzimuth) * this.mapDistance;
+    // Camera orbits the SHIP position (not system origin).
+    const sp = flight.ship.rootBody.position;
+    const x = sp.x + Math.cos(this.mapPitch) * Math.cos(this.mapAzimuth) * this.mapDistance;
+    const y = sp.y + Math.sin(this.mapPitch) * this.mapDistance;
+    const z = sp.z + Math.cos(this.mapPitch) * Math.sin(this.mapAzimuth) * this.mapDistance;
     this.camera.up.set(0, 1, 0);
     this.camera.position.set(x, y, z);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.lookAt(sp.x, sp.y, sp.z);
+
+    // Update ship marker position.
+    if (this.shipMarker) {
+      this.shipMarker.position.set(sp.x, sp.y, sp.z);
+    }
   }
 
   private recomputeTrajectory(flight: FlightController): void {
@@ -156,6 +170,12 @@ export class OrbitMap {
     let vz = root.velocity.z;
 
     const pts: THREE.Vector3[] = [];
+    // Track apoapsis / periapsis positions for markers.
+    let apR = -Infinity;
+    let peR = Infinity;
+    let apX = 0, apY = 0, apZ = 0;
+    let peX = 0, peY = 0, peZ = 0;
+
     for (let i = 0; i < TRAJECTORY_STEPS; i++) {
       const rx = px - bx;
       const ry = py - by;
@@ -163,6 +183,11 @@ export class OrbitMap {
       const r2 = rx * rx + ry * ry + rz * rz;
       const r = Math.sqrt(r2);
       if (r < dom.data.radius) break;
+
+      // Track Ap (max r) and Pe (min r) positions.
+      if (r > apR) { apR = r; apX = px; apY = py; apZ = pz; }
+      if (r < peR) { peR = r; peX = px; peY = py; peZ = pz; }
+
       pts.push(new THREE.Vector3(px, py, pz));
       const a = -mu / (r2 * r);
       vx += a * rx * TRAJECTORY_DT;
@@ -175,10 +200,42 @@ export class OrbitMap {
 
     this.clearTrajectory();
     if (pts.length < 2) return;
+
     const geom = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({ color: 0x33ff66, transparent: true, opacity: 0.7 });
     this.trajectoryLine = new THREE.Line(geom, mat);
     this.scene.add(this.trajectoryLine);
+
+    // Place Ap/Pe markers on the trajectory line.
+    this.placeMarker(this.apMarker, apX, apY, apZ, 0xff4444, 60);
+    this.apMarker = this.lastCreatedMarker;
+    this.placeMarker(this.peMarker, peX, peY, peZ, 0x4444ff, 60);
+    this.peMarker = this.lastCreatedMarker;
+  }
+
+  private lastCreatedMarker: THREE.Mesh | null = null;
+
+  private placeMarker(existing: THREE.Mesh | null, x: number, y: number, z: number, color: number, size: number): void {
+    // Remove existing if present — we recreate each frame.
+    if (existing) {
+      this.scene.remove(existing);
+      existing.geometry.dispose();
+      (existing.material as THREE.Material).dispose();
+    }
+    const geom = new THREE.SphereGeometry(size, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(x, y, z);
+    this.scene.add(mesh);
+    this.lastCreatedMarker = mesh;
+  }
+
+  private createShipMarker(): void {
+    if (this.shipMarker) return;
+    const geom = new THREE.SphereGeometry(30, 8, 8);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x44ddff });
+    this.shipMarker = new THREE.Mesh(geom, mat);
+    this.scene.add(this.shipMarker);
   }
 
   private clearTrajectory(): void {
@@ -187,6 +244,28 @@ export class OrbitMap {
       this.trajectoryLine.geometry.dispose();
       (this.trajectoryLine.material as THREE.Material).dispose();
       this.trajectoryLine = null;
+    }
+    if (this.apMarker) {
+      this.scene.remove(this.apMarker);
+      this.apMarker.geometry.dispose();
+      (this.apMarker.material as THREE.Material).dispose();
+      this.apMarker = null;
+    }
+    if (this.peMarker) {
+      this.scene.remove(this.peMarker);
+      this.peMarker.geometry.dispose();
+      (this.peMarker.material as THREE.Material).dispose();
+      this.peMarker = null;
+    }
+  }
+
+  private clearAll(): void {
+    this.clearTrajectory();
+    if (this.shipMarker) {
+      this.scene.remove(this.shipMarker);
+      this.shipMarker.geometry.dispose();
+      (this.shipMarker.material as THREE.Material).dispose();
+      this.shipMarker = null;
     }
   }
 
@@ -213,7 +292,9 @@ export class OrbitMap {
       const a = -mu / (2 * energy);
       const ap = a * (1 + ecc) - dom.data.radius;
       const pe = a * (1 - ecc) - dom.data.radius;
-      apPe = `Ap ${ap.toFixed(0)} m / Pe ${pe.toFixed(0)} m`;
+      apPe = `Ap ${ap.toFixed(0)} m / Pe ${pe.toFixed(0)} m (${dom.data.name})`;
+    } else {
+      apPe = `Escape trajectory (${dom.data.name})`;
     }
     this.apPeText.textContent = apPe;
   }
