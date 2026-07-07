@@ -15,7 +15,7 @@ export class MainMenu {
         <p class="menu-subtitle">A miniature space program</p>
         <button class="menu-btn menu-btn--primary" id="menu-start">Enter VAB ▶</button>
         <button class="menu-btn menu-btn--ghost" id="menu-quit">Quit</button>
-        <p class="menu-version">v0.3.0</p>
+        <p class="menu-version">v0.4.0</p>
       </div>
     `;
     this.root.querySelector('#menu-start')!.addEventListener('click', onStart);
