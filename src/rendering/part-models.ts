@@ -60,6 +60,20 @@ export function buildPartMesh(def: PartDef, ghost = false): THREE.Mesh {
       );
   }
 
+  // Scale the voxel mesh to exactly match the part's collision half-extents.
+  // The VAB snapping logic uses def.size for placement offsets, so the visual
+  // mesh must fill the same bounding box or parts won't connect flush.
+  const bbox = new THREE.Box3().setFromObject(mesh);
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  if (size.x > 0 && size.y > 0 && size.z > 0) {
+    mesh.scale.set(
+      (def.size[0] * 2) / size.x,
+      (def.size[1] * 2) / size.y,
+      (def.size[2] * 2) / size.z,
+    );
+  }
+
   if (ghost) {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.transparent = true;
