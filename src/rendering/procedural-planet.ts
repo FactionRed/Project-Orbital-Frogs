@@ -379,12 +379,6 @@ export interface BuiltProceduralBody {
   atmosphere: THREE.Mesh | null;
   /** Update the sun-direction uniforms each frame. */
   setSunDirection: (dir: THREE.Vector3) => void;
-  /**
-   * The displaced terrain geometry — exported so physics can build a Trimesh
-   * collider that matches the visible terrain exactly (no clipping through
-   * mountains).
-   */
-  terrainGeometry: THREE.BufferGeometry;
 }
 
 /**
@@ -426,5 +420,5 @@ export function buildProceduralBody(opts: ProceduralBodyOptions): BuiltProcedura
     }
   };
 
-  return { surface, atmosphere, setSunDirection, terrainGeometry: geometry };
+  return { surface, atmosphere, setSunDirection };
 }
