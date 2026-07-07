@@ -18,25 +18,9 @@ export class WinStates {
   constructor() {
     this.banner = document.createElement('div');
     this.banner.id = 'win-banner';
-    Object.assign(this.banner.style, {
-      position: 'absolute',
-      top: '30%',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      padding: '20px 40px',
-      background: 'rgba(0,40,0,0.95)',
-      color: '#9f9',
-      fontFamily: 'sans-serif',
-      fontSize: '22px',
-      borderRadius: '8px',
-      display: 'none',
-      zIndex: '30',
-      textAlign: 'center',
-      pointerEvents: 'auto',
-    } as Partial<CSSStyleDeclaration>);
     this.banner.innerHTML = `
       <div id="banner-text"></div>
-      <button id="banner-btn" style="margin-top:12px;padding:8px 16px;background:#163;color:#cdd;border:1px solid #445;border-radius:4px;cursor:pointer;display:none">Build Again</button>
+      <button id="banner-btn">Build Again</button>
     `;
     document.body.appendChild(this.banner);
     this.bannerText = this.banner.querySelector('#banner-text')!;

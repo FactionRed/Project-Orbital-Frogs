@@ -9,8 +9,8 @@ import { getPartDef } from '../entities/parts-catalog';
  * surface. Uses the same voxel part models and procedural planet renderer as
  * the game itself, so the menu feels like a natural extension of the game.
  *
- * The scene slowly rotates the camera for a cinematic feel. It's purely
- * decorative — no physics, no input.
+ * The crash site is placed on the moon's equator (not the pole) so the
+ * terrain has visible features and the horizon curves away naturally.
  */
 export class MenuScene {
   readonly group: THREE.Group;
@@ -22,10 +22,10 @@ export class MenuScene {
 
   constructor(aspect: number) {
     this.group = new THREE.Group();
-    this.camera = new THREE.PerspectiveCamera(50, aspect, 0.5, 20000);
-    this.ambient = new THREE.AmbientLight(0x303048, 0.6);
-    this.sun = new THREE.DirectionalLight(0xffeecc, 1.5);
-    this.sun.position.set(200, 100, 150);
+    this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 20000);
+    this.ambient = new THREE.AmbientLight(0x303048, 0.5);
+    this.sun = new THREE.DirectionalLight(0xffeecc, 1.8);
+    this.sun.position.set(200, 300, 100);
 
     this.group.add(this.ambient);
     this.group.add(this.sun);
@@ -35,77 +35,77 @@ export class MenuScene {
 
   private buildScene(): void {
     // --- Moon surface ---
+    const moonRadius = 400;
     const moon = buildProceduralBody({
-      radius: 800,
+      radius: moonRadius,
       seed: 42,
       kind: 'moon',
-      sunDirection: new THREE.Vector3(1, 0.3, 0.6),
+      sunDirection: new THREE.Vector3(1, 0.5, 0.3),
     });
     this.group.add(moon.surface);
 
-    // Place the camera at the surface, looking out across the terrain.
-    // The moon center is at origin; north pole is at (0, 800, 0).
-    // We'll put the crash site near the north pole so the terrain is flat-ish.
+    // Place the crash site on the equator at +X.
+    // Surface point: (moonRadius, 0, 0). "Up" is +X direction.
+    const surfacePoint = new THREE.Vector3(moonRadius, 0, 0);
+    const up = surfacePoint.clone().normalize(); // (1, 0, 0)
+
+    // Build a local frame: up = radial, forward = +Z, right = up × forward
+    const forward = new THREE.Vector3(0, 0, 1);
+    const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+    forward.crossVectors(right, up).normalize();
 
     // --- Crashed rocket debris ---
-    // Scatter voxel parts around the crash site with random rotations.
-    const crashY = 800; // moon surface at north pole
+    // Scatter parts in the local tangent plane around the crash site.
     const partIds = ['pod', 'tank', 'engine', 'tank', 'strut', 'winglet', 'engine'];
-    const scatter: { x: number; z: number; ry: number; scale: number }[] = [
-      { x: 0,    z: -8,  ry: 0.3,  scale: 1.0 },   // pod — main wreck
-      { x: 6,    z: 3,   ry: 1.2,  scale: 0.9 },   // tank — rolled away
-      { x: -5,   z: 5,   ry: -0.8, scale: 0.85 },  // engine — detached
-      { x: 10,   z: -2,  ry: 2.1,  scale: 0.7 },   // second tank fragment
-      { x: -8,   z: -3,  ry: 0.7,  scale: 0.6 },   // strut piece
-      { x: 3,    z: 8,   ry: -1.5, scale: 0.8 },   // winglet
-      { x: -3,   z: -6,  ry: 1.8,  scale: 0.5 },   // small engine piece
+    const scatter: { fwd: number; right: number; ry: number; scale: number; tilt: number }[] = [
+      { fwd: 0,  right: 0,  ry: 0.3,  scale: 1.2, tilt: 0.2 },   // pod — main wreck, tilted
+      { fwd: 5,  right: 3,  ry: 1.2,  scale: 1.0, tilt: 0.5 },   // tank — rolled away
+      { fwd: -4, right: 4,  ry: -0.8, scale: 0.9, tilt: 0.3 },   // engine — detached
+      { fwd: 8,  right: -2, ry: 2.1,  scale: 0.7, tilt: 0.6 },   // second tank fragment
+      { fwd: -6, right: -3, ry: 0.7,  scale: 0.6, tilt: 0.4 },   // strut piece
+      { fwd: 3,  right: 6,  ry: -1.5, scale: 0.8, tilt: 0.1 },   // winglet
+      { fwd: -3, right: -5, ry: 1.8,  scale: 0.5, tilt: 0.7 },   // small engine piece
     ];
 
     for (let i = 0; i < partIds.length; i++) {
       const def = getPartDef(partIds[i]);
       const mesh = buildPartMesh(def);
       const s = scatter[i];
-      mesh.position.set(s.x, crashY + 1, s.z);
-      mesh.rotation.y = s.ry;
-      mesh.rotation.x = (Math.random() - 0.5) * 0.4;
-      mesh.rotation.z = (Math.random() - 0.5) * 0.4;
+
+      // Position on the tangent plane: surfacePoint + right*s.right + forward*s.fwd + up*offset
+      const pos = surfacePoint.clone()
+        .addScaledVector(right, s.right)
+        .addScaledVector(forward, s.fwd)
+        .addScaledVector(up, 0.5); // lift slightly above surface
+      mesh.position.copy(pos);
+
+      // Orient the part so its Y axis aligns with the local "up" (radial).
+      const upQuat = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        up,
+      );
+      mesh.quaternion.copy(upQuat);
+      // Apply tilt and rotation around local up.
+      mesh.rotateOnAxis(up, s.ry);
+      mesh.rotateOnAxis(right, s.tilt);
+
       mesh.scale.multiplyScalar(s.scale);
       this.group.add(mesh);
       this.debris.push(mesh);
     }
 
-    // --- Crater scorch marks (dark decals) ---
-    const scorchGeom = new THREE.CircleGeometry(12, 24);
-    const scorchMat = new THREE.MeshBasicMaterial({
-      color: 0x221111,
-      transparent: true,
-      opacity: 0.5,
-      depthWrite: false,
-    });
-    for (let i = 0; i < 3; i++) {
-      const scorch = new THREE.Mesh(scorchGeom, scorchMat.clone());
-      const angle = (i / 3) * Math.PI * 2;
-      const r = 5 + i * 4;
-      scorch.position.set(Math.cos(angle) * r, crashY + 0.1, Math.sin(angle) * r);
-      scorch.rotation.x = -Math.PI / 2;
-      (scorch.material as THREE.MeshBasicMaterial).opacity = 0.4 - i * 0.1;
-      this.group.add(scorch);
-    }
-
     // --- Stars ---
     const starGeom = new THREE.BufferGeometry();
-    const starCount = 800;
+    const starCount = 1200;
     const positions = new Float32Array(starCount * 3);
     const colors = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount; i++) {
-      // Random points on a large sphere
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const r = 5000;
+      const r = 8000;
       positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       positions[i * 3 + 2] = r * Math.cos(phi);
-      // Vary brightness
       const brightness = 0.3 + Math.random() * 0.7;
       colors[i * 3] = brightness;
       colors[i * 3 + 1] = brightness;
@@ -114,7 +114,7 @@ export class MenuScene {
     starGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     starGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     const starMat = new THREE.PointsMaterial({
-      size: 2,
+      size: 3,
       vertexColors: true,
       sizeAttenuation: false,
     });
@@ -122,52 +122,70 @@ export class MenuScene {
     this.group.add(stars);
 
     // --- Distant planet (Terra) in the sky ---
-    const planetGeom = new THREE.SphereGeometry(200, 32, 24);
+    const planetGeom = new THREE.SphereGeometry(120, 32, 24);
     const planetMat = new THREE.MeshStandardMaterial({
       color: 0x336699,
       emissive: 0x112244,
-      emissiveIntensity: 0.3,
-      roughness: 0.8,
+      emissiveIntensity: 0.4,
+      roughness: 0.7,
     });
     const planet = new THREE.Mesh(planetGeom, planetMat);
-    planet.position.set(800, 1200, -2000);
+    // Place high in the sky, opposite the sun.
+    planet.position.copy(surfacePoint).addScaledVector(up, 800).addScaledVector(forward, -600);
     this.group.add(planet);
 
     // Atmosphere glow around the distant planet
-    const atmoGeom = new THREE.SphereGeometry(280, 32, 24);
+    const atmoGeom = new THREE.SphereGeometry(170, 32, 24);
     const atmoMat = new THREE.MeshBasicMaterial({
       color: 0x4488cc,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.2,
       side: THREE.BackSide,
     });
     const atmo = new THREE.Mesh(atmoGeom, atmoMat);
     atmo.position.copy(planet.position);
     this.group.add(atmo);
+
+    // Store camera anchor info.
+    this._surfacePoint = surfacePoint;
+    this._up = up;
+    this._right = right;
+    this._forward = forward;
   }
+
+  private _surfacePoint = new THREE.Vector3();
+  private _up = new THREE.Vector3(1, 0, 0);
+  private _right = new THREE.Vector3();
+  private _forward = new THREE.Vector3();
 
   private updateCamera(): void {
-    // Camera sits low on the moon surface, looking across the crash site.
-    const surfaceY = 800;
-    const radius = 25;
-    const angle = this.time * 0.08; // slow cinematic orbit — ~80s per revolution
-    this.camera.position.set(
-      Math.cos(angle) * radius,
-      surfaceY + 6,
-      Math.sin(angle) * radius,
-    );
-    this.camera.lookAt(0, surfaceY + 2, 0);
+    // Camera orbits around the crash site on the tangent plane.
+    // Distance ~18, height ~5 above surface, looking at the center of the debris.
+    const radius = 18;
+    const height = 5;
+    const angle = this.time * 0.08; // slow cinematic orbit
+
+    const camPos = this._surfacePoint.clone()
+      .addScaledVector(this._right, Math.cos(angle) * radius)
+      .addScaledVector(this._forward, Math.sin(angle) * radius)
+      .addScaledVector(this._up, height);
+    this.camera.position.copy(camPos);
+
+    // Look at a point slightly above the crash site center.
+    const lookAt = this._surfacePoint.clone().addScaledVector(this._up, 1.5);
+    this.camera.lookAt(lookAt);
+
+    // Camera "up" = the radial up so the horizon looks correct.
+    this.camera.up.copy(this._up);
   }
 
-  /** Advance the scene by dt seconds. */
   update(dt: number): void {
     this.time += dt;
     this.updateCamera();
 
-    // Subtle debris sway (wind effect on a dead world — eerie)
     for (let i = 0; i < this.debris.length; i++) {
       const d = this.debris[i];
-      d.rotation.z += Math.sin(this.time * 0.5 + i) * 0.0003;
+      d.rotateOnAxis(this._up, Math.sin(this.time * 0.3 + i) * 0.0002);
     }
   }
 

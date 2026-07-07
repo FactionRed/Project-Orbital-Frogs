@@ -25,16 +25,6 @@ export class NavBall {
     this.canvas.id = 'navball';
     this.canvas.width = this.size;
     this.canvas.height = this.size;
-    Object.assign(this.canvas.style, {
-      position: 'absolute',
-      left: '50%',
-      bottom: '12px',
-      transform: 'translateX(-50%)',
-      background: 'rgba(0,0,10,0.6)',
-      border: '2px solid #445',
-      borderRadius: '50%',
-      zIndex: '15',
-    } as Partial<CSSStyleDeclaration>);
     document.body.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d')!;
   }

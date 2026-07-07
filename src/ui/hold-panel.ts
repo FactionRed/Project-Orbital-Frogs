@@ -21,21 +21,6 @@ export class HoldPanel {
   constructor() {
     this.root = document.createElement('div');
     this.root.id = 'hold-panel';
-    Object.assign(this.root.style, {
-      position: 'absolute',
-      left: '50%',
-      bottom: '12px',
-      transform: 'translateX(-50%)',
-      display: 'none',
-      gap: '6px',
-      padding: '6px 8px',
-      background: 'rgba(0,0,10,0.6)',
-      border: '1px solid #2a3550',
-      borderRadius: '6px',
-      zIndex: '15',
-      // Sit the panel to the LEFT of the navball (which is also bottom-center).
-      marginRight: '220px',
-    } as Partial<CSSStyleDeclaration>);
     document.body.appendChild(this.root);
 
     const defs: { mode: HoldMode; glyph: string; color: string; title: string }[] = [
@@ -50,18 +35,7 @@ export class HoldPanel {
       const btn = document.createElement('button');
       btn.title = d.title;
       btn.textContent = d.glyph;
-      Object.assign(btn.style, {
-        width: '34px',
-        height: '34px',
-        fontSize: '18px',
-        lineHeight: '1',
-        color: d.color,
-        background: 'rgba(20,30,50,0.9)',
-        border: '1px solid #345',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        padding: '0',
-      } as Partial<CSSStyleDeclaration>);
+      btn.style.color = d.color;
       btn.addEventListener('click', () => {
         // Toggle: clicking the active mode turns it off.
         const next: HoldMode = this.active === d.mode ? 'off' : d.mode;
