@@ -1,7 +1,7 @@
 // src/entities/part.ts
 import * as THREE from 'three';
 
-export type PartKind = 'pod' | 'tank' | 'engine' | 'winglet' | 'strut';
+export type PartKind = 'pod' | 'tank' | 'engine' | 'winglet' | 'strut' | 'thermometer' | 'barometer' | 'gravity_scanner';
 
 /**
  * An attachment hardpoint on a part. Parts snap together when two nodes with

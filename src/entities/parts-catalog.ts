@@ -51,6 +51,23 @@ export const PARTS_CATALOG: PartDef[] = [
       { pos: [0, -2.0, 0], dir: [0, -1, 0] }, // bottom
     ],
   },
+  // --- Science instruments (unlocked via tech tree) ---
+  {
+    id: 'thermometer', name: 'Thermometer', kind: 'thermometer', dryMass: 0.05,
+    desc: 'Measures temperature — works landed or in atmosphere',
+    size: [0.4, 0.4, 0.4], color: 0xcc8800,
+    // Surface-attach only — no stack nodes (sticks to side of pod/tank)
+  },
+  {
+    id: 'barometer', name: 'Barometer', kind: 'barometer', dryMass: 0.05,
+    desc: 'Measures atmospheric pressure — atmosphere only',
+    size: [0.4, 0.4, 0.4], color: 0x8844cc,
+  },
+  {
+    id: 'gravity_scanner', name: 'Gravity Scanner', kind: 'gravity_scanner', dryMass: 0.1,
+    desc: 'Measures local gravity — works landed on any body',
+    size: [0.5, 0.5, 0.5], color: 0x4488cc,
+  },
 ];
 
 export function getPartDef(id: string): PartDef {

@@ -13,6 +13,8 @@ export class Hud {
   private soi: HTMLElement;
   private sasIndicator: HTMLElement;
   private qBar: HTMLElement;
+  private sciCounter: HTMLElement;
+  private biomeDisplay: HTMLElement;
 
   constructor() {
     this.root = document.createElement('div');
@@ -27,6 +29,8 @@ export class Hud {
         <div class="row"><span class="label">Q</span><span id="qbar" class="val">0</span><span class="unit">kPa</span></div>
         <div class="row"><span class="label">SOI</span><span id="soi" class="val wide">-</span></div>
         <div class="row"><span class="label">SAS</span><span id="sas" class="val wide" style="color:#777">OFF</span></div>
+        <div class="row"><span class="label">SCI</span><span id="sci" class="val" style="color:#4af">0</span></div>
+        <div class="row" id="biome-row" style="display:none"><span class="label">BIOME</span><span id="biome" class="val wide">-</span></div>
       </div>
     `;
     document.body.appendChild(this.root);
@@ -38,6 +42,8 @@ export class Hud {
     this.soi = this.root.querySelector('#soi')!;
     this.sasIndicator = this.root.querySelector('#sas')!;
     this.qBar = this.root.querySelector('#qbar')!;
+    this.sciCounter = this.root.querySelector('#sci')!;
+    this.biomeDisplay = this.root.querySelector('#biome')!;
   }
 
   update(flight: FlightController): void {
@@ -95,6 +101,22 @@ export class Hud {
     } else {
       this.sasIndicator.textContent = 'OFF';
       this.sasIndicator.style.color = '#777';
+    }
+  }
+
+  /** Update the science points counter. */
+  setScience(points: number): void {
+    this.sciCounter.textContent = points.toString();
+  }
+
+  /** Update the biome display (shown when landed). */
+  setBiome(biome: string | null): void {
+    const row = this.root.querySelector('#biome-row') as HTMLElement;
+    if (biome) {
+      this.biomeDisplay.textContent = biome;
+      row.style.display = 'grid';
+    } else {
+      row.style.display = 'none';
     }
   }
 

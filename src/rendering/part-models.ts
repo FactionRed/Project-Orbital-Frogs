@@ -70,6 +70,15 @@ export function buildPartMesh(def: PartDef, ghost = false): THREE.Mesh {
     case 'strut':
       mesh = buildStrut(m);
       break;
+    case 'thermometer':
+      mesh = buildThermometer(m);
+      break;
+    case 'barometer':
+      mesh = buildBarometer(m);
+      break;
+    case 'gravity_scanner':
+      mesh = buildGravityScanner(m);
+      break;
     default:
       mesh = new THREE.Mesh(
         new THREE.BoxGeometry(def.size[0] * 2, def.size[1] * 2, def.size[2] * 2),
@@ -246,5 +255,36 @@ function buildStrut(m: VoxelModel): THREE.Mesh {
   m.addBox(-1, -4, -1, 1, -4, 1, C.strutDark);
   m.addBox(-1, 4, -1, 1, 4, 1, C.strutDark);
 
+  return m.buildMesh();
+}
+
+// --- Science instruments ---
+
+/** Thermometer — small orange sensor pod with antenna spike. */
+function buildThermometer(m: VoxelModel): THREE.Mesh {
+  m.addBox(-1, -1, -1, 1, 1, 1, 0xcc8800);
+  m.addBox(-1, 1, -1, 1, 2, 1, 0xffaa22);
+  m.add(0, 3, 0, 0x664400);
+  m.add(0, 4, 0, 0x664400);
+  return m.buildMesh();
+}
+
+/** Barometer — purple cylinder with pressure gauge face. */
+function buildBarometer(m: VoxelModel): THREE.Mesh {
+  m.addBox(-1, -1, -1, 1, 1, 1, 0x8844cc);
+  m.addBox(-1, -1, 1, 1, 1, 2, 0xbbaaff);
+  m.addBox(-1, 1, -1, 1, 2, 1, 0x663399);
+  return m.buildMesh();
+}
+
+/** Gravity Scanner — blue sensor dome on a base plate. */
+function buildGravityScanner(m: VoxelModel): THREE.Mesh {
+  m.addBox(-2, -2, -2, 2, -1, 2, 0x446688);
+  m.addBox(-1, -1, -1, 1, 1, 1, 0x4488cc);
+  m.add(0, 2, 0, 0x88ccff);
+  m.add(-1, 2, 0, 0x66aadd);
+  m.add(1, 2, 0, 0x66aadd);
+  m.add(0, 2, -1, 0x66aadd);
+  m.add(0, 2, 1, 0x66aadd);
   return m.buildMesh();
 }

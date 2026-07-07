@@ -16,6 +16,8 @@ canvas { display: block; }
   background: #112; color: #cdd; border-radius: 4px; cursor: pointer; font-size: 12px;
 }
 .part-btn:hover { background: #224; }
+.part-btn.part-locked { opacity: 0.4; cursor: not-allowed; }
+.part-btn.part-locked:hover { background: #112; }
 .part-btn .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; }
 #vab-ui .actions { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
 #vab-ui .actions button { padding: 8px; border-radius: 4px; border: 1px solid #334; background: #112; color: #cdd; cursor: pointer; }
@@ -173,3 +175,31 @@ canvas { display: block; }
   cursor: pointer; display: none;
 }
 #win-banner #banner-btn:hover { background: #274; }
+
+/* Experiment panel — shown during flight with science instruments. */
+#experiment-panel {
+  position: absolute; top: 12px; left: 12px;
+  background: rgba(5,10,20,0.78); backdrop-filter: blur(4px);
+  border: 1px solid #2a3550; border-radius: 6px;
+  padding: 8px 10px; z-index: 12; display: none;
+  font-family: monospace; font-size: 11px; color: #cdd;
+  min-width: 200px; max-width: 280px;
+}
+#experiment-panel .exp-header { font-size: 12px; font-weight: bold; color: #4af; margin-bottom: 6px; }
+#experiment-panel .exp-item {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center;
+  gap: 4px; padding: 3px 0; border-bottom: 1px solid rgba(40,50,70,0.5);
+}
+#experiment-panel .exp-item:last-child { border-bottom: none; }
+#experiment-panel .exp-name { font-weight: bold; color: #fff; }
+#experiment-panel .exp-detail { grid-column: 1; font-size: 9px; color: #889; }
+#experiment-panel .exp-value { color: #4af; font-size: 10px; }
+#experiment-panel .exp-btn {
+  width: 24px; height: 24px; font-size: 12px; padding: 0;
+  background: rgba(20,40,60,0.9); border: 1px solid #345; border-radius: 3px;
+  cursor: pointer; color: #fff;
+}
+#experiment-panel .exp-btn:hover:not(:disabled) { background: rgba(40,80,120,0.9); }
+#experiment-panel .exp-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+#experiment-panel .exp-done { opacity: 0.5; }
+#experiment-panel .exp-done .exp-value { color: #6a5; }

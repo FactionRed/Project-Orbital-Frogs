@@ -1,5 +1,7 @@
 // src/building/vab-ui.ts
 import { PARTS_CATALOG } from '../entities/parts-catalog';
+import { isPartUnlocked } from '../game/tech-tree';
+import type { ScienceState } from '../game/science';
 
 export interface VabUiCallbacks {
   onSelectPart: (partId: string | null) => void;
@@ -12,6 +14,7 @@ export interface VabUiCallbacks {
 export class VabUi {
   private root: HTMLElement;
   private launchBtn: HTMLButtonElement;
+  private sciState: ScienceState | null = null;
   onReadyChange: (canLaunch: boolean) => void = () => {};
 
   constructor(cbs: VabUiCallbacks) {
@@ -33,17 +36,21 @@ export class VabUi {
     document.body.appendChild(this.root);
 
     const palette = this.root.querySelector('#palette')!;
+    palette.innerHTML = '';
     for (const p of PARTS_CATALOG) {
+      const unlocked = !this.sciState || isPartUnlocked(p.id, this.sciState.unlockedNodes);
       const btn = document.createElement('button');
       btn.className = 'part-btn';
+      if (!unlocked) btn.classList.add('part-locked');
       btn.dataset.partId = p.id;
       btn.title = p.desc;
+      btn.disabled = !unlocked;
       btn.innerHTML = `<span class="swatch" style="background:#${p.color
         .toString(16)
-        .padStart(6, '0')}"></span>${p.name}<br><small>${p.dryMass}t${
+        .padStart(6, '0')}"></span>${p.name}${unlocked ? '' : ' 🔒'}<br><small>${p.dryMass}t${
         p.fuel ? ` · ${p.fuel} fuel` : ''
       }${p.thrust ? ` · ${p.thrust}kN` : ''} · ${p.desc}</small>`;
-      btn.addEventListener('click', () => cbs.onSelectPart(p.id));
+      if (unlocked) btn.addEventListener('click', () => cbs.onSelectPart(p.id));
       palette.appendChild(btn);
     }
 
@@ -57,6 +64,11 @@ export class VabUi {
     this.onReadyChange = (ready) => {
       this.launchBtn.disabled = !ready;
     };
+  }
+
+  /** Update which parts are unlocked (called when science state changes). */
+  updateScienceState(state: ScienceState): void {
+    this.sciState = state;
   }
 
   show(): void {

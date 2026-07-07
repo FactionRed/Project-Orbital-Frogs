@@ -18,6 +18,8 @@ import { StagingDisplay } from './ui/staging-display';
 import { installDebugInterface } from './dev/debug-interface';
 import { MenuScene } from './ui/menu-scene';
 import { MainMenu } from './ui/main-menu';
+import { loadScienceState, saveScienceState, type ScienceState } from './game/science';
+import { ExperimentPanel } from './ui/experiment-panel';
 import type { ShipDesign } from './entities/ship';
 import { initAssets } from './assets';
 
@@ -141,6 +143,7 @@ function revertToVab() {
   win.hide();
   flightPrompts.hide();
   stagingDisplay.hide();
+  experimentPanel.hide();
   fsm.transition('BUILD');
 }
 
@@ -167,8 +170,22 @@ holdPanel.onSelect = (mode) => {
     if (mode !== 'off') flight.sasEnabled = false;
   }
 };
-const win = new WinStates();
+// --- Science system ---
+let sciState = loadScienceState();
+
+function onScienceUpdate(newState: ScienceState): void {
+  sciState = newState;
+  saveScienceState(sciState);
+  hud.setScience(sciState.points);
+  win.updateScienceState(sciState);
+  experimentPanel.updateScienceState(sciState);
+  ui.updateScienceState(sciState);
+}
+
+const win = new WinStates(sciState, onScienceUpdate);
 win.onBuildAgain = () => revertToVab();
+const experimentPanel = new ExperimentPanel(sciState, onScienceUpdate);
+hud.setScience(sciState.points);
 input.onPressed('KeyM', () => orbitMap.toggle(renderer.domElement, flight ?? undefined));
 input.onPressed('F1', () => {
   if (fsm.current !== 'BUILD') revertToVab();
@@ -303,6 +320,7 @@ function animate() {
       win.update(flight);
       flightPrompts.update(flight);
       stagingDisplay.update(flight);
+      experimentPanel.update(flight);
     }
     precisionIndicator.style.display = controls.precisionMode ? 'block' : 'none';
   }

@@ -2,6 +2,8 @@
 import type { FlightController } from '../flight/flight-controller';
 import { isClosedOrbit } from '../physics/orbit-math';
 import { MOON_SOI } from '../physics/constants';
+import type { ScienceState } from '../game/science';
+import { checkMilestone } from '../game/science';
 
 export type WinEvent = 'orbit' | 'moon-landed' | 'safe-return' | 'crash';
 
@@ -12,10 +14,14 @@ export class WinStates {
   private achieved = new Set<WinEvent>();
   private wasInMoonSoi = false;
   private hideTimer = 0;
+  private sciState: ScienceState;
+  private onScienceUpdate: (state: ScienceState) => void;
   onEvent: (e: WinEvent) => void = () => {};
   onBuildAgain: () => void = () => {};
 
-  constructor() {
+  constructor(sciState: ScienceState, onScienceUpdate: (state: ScienceState) => void) {
+    this.sciState = sciState;
+    this.onScienceUpdate = onScienceUpdate;
     this.banner = document.createElement('div');
     this.banner.id = 'win-banner';
     this.banner.innerHTML = `
@@ -65,7 +71,10 @@ export class WinStates {
       isClosedOrbit(r, v, planet.mu, planet.data.radius)
     ) {
       this.achieved.add('orbit');
-      this.show('🌱 Orbit Achieved!');
+      const ms = checkMilestone(this.sciState, 'first-orbit');
+      this.sciState = ms.state;
+      this.onScienceUpdate(this.sciState);
+      this.show(ms.awarded > 0 ? `🌱 Orbit Achieved! +${ms.awarded} sci` : '🌱 Orbit Achieved!');
       this.onEvent('orbit');
     }
 
@@ -85,7 +94,10 @@ export class WinStates {
       const vertSpeed = Math.abs(radialVel);
       if (moonAlt < 50 && vertSpeed < 30) {
         this.achieved.add('moon-landed');
-        this.show('🌕 Lunar Landing!');
+        const ms = checkMilestone(this.sciState, 'first-moon-landing');
+        this.sciState = ms.state;
+        this.onScienceUpdate(this.sciState);
+        this.show(ms.awarded > 0 ? `🌕 Lunar Landing! +${ms.awarded} sci` : '🌕 Lunar Landing!');
         this.onEvent('moon-landed');
       }
     }
@@ -116,10 +128,17 @@ export class WinStates {
     if (this.wasInMoonSoi && !inMoonSoi && !this.achieved.has('safe-return')) {
       if (planetAlt < 100 && Math.hypot(v[0], v[1], v[2]) < 50) {
         this.achieved.add('safe-return');
-        this.show('🏆 Mission Complete! Safe Return.', true);
+        const ms = checkMilestone(this.sciState, 'first-safe-return');
+        this.sciState = ms.state;
+        this.onScienceUpdate(this.sciState);
+        this.show(ms.awarded > 0 ? `🏆 Mission Complete! Safe Return. +${ms.awarded} sci` : '🏆 Mission Complete! Safe Return.', true);
         this.onEvent('safe-return');
       }
     }
+  }
+
+  updateScienceState(state: ScienceState): void {
+    this.sciState = state;
   }
 
   reset(): void {
