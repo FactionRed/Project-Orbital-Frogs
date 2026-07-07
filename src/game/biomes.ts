@@ -32,6 +32,7 @@ export function getBiome(
   dirX: number, dirY: number, dirZ: number,
   displacement: number,
   kind: 'planet' | 'moon',
+  planetDirX = 0, planetDirY = 0, planetDirZ = 0,
 ): BiomeInfo {
   if (kind === 'planet') {
     // Polar regions (near north or south pole).
@@ -61,21 +62,13 @@ export function getBiome(
   }
 
   // Near side (facing the planet) vs far side.
-  // The moon orbits in the XZ plane, so "facing the planet" means the
-  // direction from moon center toward planet center. We approximate by
-  // checking if the ship is on the side closest to the origin.
-  const distFromOrigin = Math.hypot(dirX, dirY, dirZ);
-  if (distFromOrigin > 0) {
-    // Dot product with direction to origin (-dir). If positive, near side.
-    // We don't know the planet's position here, so approximate: near side
-    // is the -X hemisphere (planet is at origin, moon orbits at +X).
-    if (dirX < 0) {
-      return { name: 'Near Side', desc: 'The face that sees the planet' };
-    }
-    return { name: 'Far Side', desc: 'The hidden face' };
+  // Use the direction from moon center to planet center (planetDir).
+  // If the ship's direction from moon center aligns with planetDir, it's near side.
+  const dot = dirX * planetDirX + dirY * planetDirY + dirZ * planetDirZ;
+  if (dot > 0) {
+    return { name: 'Near Side', desc: 'The face that sees the planet' };
   }
-
-  return { name: 'Lunar Surface', desc: 'Barren regolith' };
+  return { name: 'Far Side', desc: 'The hidden face' };
 }
 
 /**
@@ -85,10 +78,10 @@ export function getBiome(
  * @param atmHeight — atmosphere height (0 if no atmosphere)
  */
 export function getSituation(alt: number, atmHeight: number): Situation {
-  if (alt < 0) return 'landed'; // on or below surface
+  if (alt <= 5) return 'landed'; // on surface (5m tolerance for collision offset)
   if (atmHeight > 0 && alt < atmHeight * 0.3) return 'flying-low';
   if (atmHeight > 0 && alt < atmHeight) return 'flying-high';
-  if (alt < atmHeight * 5 || alt < 50000) return 'space-low';
+  if (alt < 50000) return 'space-low';
   return 'space-high';
 }
 

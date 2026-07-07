@@ -40,7 +40,6 @@ export const MILESTONES: Milestone[] = [
   { id: 'first-orbit', name: 'First Orbit', science: 10 },
   { id: 'first-moon-landing', name: 'First Moon Landing', science: 25 },
   { id: 'first-safe-return', name: 'First Safe Return', science: 25 },
-  { id: 'first-flight', name: 'First Flight', science: 5 },
 ];
 
 /** Default state — all 5 base parts unlocked, no science earned. */

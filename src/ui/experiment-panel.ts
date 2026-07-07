@@ -38,6 +38,8 @@ export class ExperimentPanel {
     this.hide();
   }
 
+  private lastListKey = '';
+
   /** Called each physics step during flight. */
   update(flight: FlightController): void {
     const root = flight.ship.rootBody;
@@ -76,13 +78,30 @@ export class ExperimentPanel {
       const nx = dx / dist, ny = dy / dist, nz = dz / dist;
       const surfaceR = dom.terrainRadiusAt(nx, ny, nz);
       const displacement = surfaceR - dom.data.radius;
-      const biomeInfo = getBiome(nx, ny, nz, displacement, dom.data.kind ?? 'planet');
+      // For moon, compute direction from moon to planet for near/far side.
+      let planetDirX = 0, planetDirY = 0, planetDirZ = 0;
+      if (dom !== flight.planet) {
+        const pdx = flight.planet.position.x - dom.position.x;
+        const pdy = flight.planet.position.y - dom.position.y;
+        const pdz = flight.planet.position.z - dom.position.z;
+        const plen = Math.hypot(pdx, pdy, pdz);
+        if (plen > 0) { planetDirX = pdx/plen; planetDirY = pdy/plen; planetDirZ = pdz/plen; }
+      }
+      const biomeInfo = getBiome(nx, ny, nz, displacement, dom.data.kind ?? 'planet', planetDirX, planetDirY, planetDirZ);
       biome = biomeInfo.name;
     }
 
+    // Build a cache key — only rebuild DOM if something changed.
+    const listKey = `${instruments.join(',')}:${dom.data.name}:${biome}:${situation}:${this.sciState.completedExperiments.length}`;
+    if (listKey === this.lastListKey) {
+      // Nothing changed — keep current DOM, just ensure visibility.
+      this.show();
+      return;
+    }
+    this.lastListKey = listKey;
+
     // Build experiment list.
     this.list.innerHTML = '';
-    let hasAvailable = false;
 
     for (const kind of instruments) {
       const canRun = canRunExperiment(kind, situation, alt, hasAtmosphere);
@@ -97,8 +116,6 @@ export class ExperimentPanel {
         item.classList.add('exp-disabled');
       } else if (completed) {
         item.classList.add('exp-done');
-      } else {
-        hasAvailable = true;
       }
 
       const status = !canRun ? '🔒' : completed ? '✓' : '▶';
@@ -117,14 +134,14 @@ export class ExperimentPanel {
         const result = completeExperiment(this.sciState, key, baseValue);
         this.sciState = result.state;
         this.onScienceUpdate(this.sciState);
-        this.update(flight); // refresh list
+        this.lastListKey = ''; // force rebuild next frame
       });
 
       this.list.appendChild(item);
     }
 
-    if (hasAvailable) this.show();
-    else this.hide();
+    // Show panel if ship has instruments, regardless of runnable state.
+    this.show();
   }
 
   updateScienceState(state: ScienceState): void {

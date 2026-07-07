@@ -15,9 +15,11 @@ export class VabUi {
   private root: HTMLElement;
   private launchBtn: HTMLButtonElement;
   private sciState: ScienceState | null = null;
+  private cbs: VabUiCallbacks;
   onReadyChange: (canLaunch: boolean) => void = () => {};
 
   constructor(cbs: VabUiCallbacks) {
+    this.cbs = cbs;
     this.root = document.createElement('div');
     this.root.id = 'vab-ui';
     this.root.innerHTML = `
@@ -34,7 +36,22 @@ export class VabUi {
       </div>
     `;
     document.body.appendChild(this.root);
+    this.rebuildPalette();
 
+    this.root.querySelector('#rotate-q')!.addEventListener('click', () => cbs.onRotateSelected(-90));
+    this.root.querySelector('#rotate-e')!.addEventListener('click', () => cbs.onRotateSelected(90));
+    this.root.querySelector('#delete')!.addEventListener('click', () => cbs.onDeleteSelected());
+    this.root.querySelector('#clear')!.addEventListener('click', () => cbs.onClear());
+    this.launchBtn = this.root.querySelector('#launch') as HTMLButtonElement;
+    this.launchBtn.addEventListener('click', () => cbs.onLaunch());
+
+    this.onReadyChange = (ready) => {
+      this.launchBtn.disabled = !ready;
+    };
+  }
+
+  /** Rebuild the parts palette with current unlock state. */
+  private rebuildPalette(): void {
     const palette = this.root.querySelector('#palette')!;
     palette.innerHTML = '';
     for (const p of PARTS_CATALOG) {
@@ -50,25 +67,15 @@ export class VabUi {
         .padStart(6, '0')}"></span>${p.name}${unlocked ? '' : ' 🔒'}<br><small>${p.dryMass}t${
         p.fuel ? ` · ${p.fuel} fuel` : ''
       }${p.thrust ? ` · ${p.thrust}kN` : ''} · ${p.desc}</small>`;
-      if (unlocked) btn.addEventListener('click', () => cbs.onSelectPart(p.id));
+      if (unlocked) btn.addEventListener('click', () => this.cbs.onSelectPart(p.id));
       palette.appendChild(btn);
     }
-
-    this.root.querySelector('#rotate-q')!.addEventListener('click', () => cbs.onRotateSelected(-90));
-    this.root.querySelector('#rotate-e')!.addEventListener('click', () => cbs.onRotateSelected(90));
-    this.root.querySelector('#delete')!.addEventListener('click', () => cbs.onDeleteSelected());
-    this.root.querySelector('#clear')!.addEventListener('click', () => cbs.onClear());
-    this.launchBtn = this.root.querySelector('#launch') as HTMLButtonElement;
-    this.launchBtn.addEventListener('click', () => cbs.onLaunch());
-
-    this.onReadyChange = (ready) => {
-      this.launchBtn.disabled = !ready;
-    };
   }
 
-  /** Update which parts are unlocked (called when science state changes). */
+  /** Update which parts are unlocked — rebuilds the palette. */
   updateScienceState(state: ScienceState): void {
     this.sciState = state;
+    this.rebuildPalette();
   }
 
   show(): void {
