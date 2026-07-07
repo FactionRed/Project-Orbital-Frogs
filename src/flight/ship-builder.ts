@@ -6,6 +6,8 @@ import { getPartDef } from '../entities/parts-catalog';
 import { COLLISION_GROUP, SHIP_COLLISION_MASK } from '../physics/collision-groups';
 import type { PartDef } from '../entities/part';
 
+import { buildPartMesh } from '../rendering/part-models';
+
 export interface BodyMeta {
   uid: string;
   partId: string;
@@ -86,10 +88,7 @@ export function buildShipPhysics(design: ShipDesign): BuiltShip {
     const quat = new CANNON.Quaternion(tmpQuat.x, tmpQuat.y, tmpQuat.z, tmpQuat.w);
     body.addShape(shape, offset, quat);
 
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(def.size[0] * 2, def.size[1] * 2, def.size[2] * 2),
-      new THREE.MeshStandardMaterial({ color: def.color }),
-    );
+    const mesh = buildPartMesh(def);
     mesh.position.copy(placed.position);
     mesh.rotation.copy(placed.rotation);
     group.add(mesh);
