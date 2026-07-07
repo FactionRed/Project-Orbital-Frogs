@@ -26,7 +26,8 @@ canvas { display: block; }
   position: absolute; top: 12px; right: 12px;
   color: #eef; font-family: monospace; font-size: 13px;
   display: none; pointer-events: none; z-index: 10;
-  background: rgba(5,10,20,0.78); padding: 10px 12px; border-radius: 6px;
+  background: rgba(5,10,20,0.78); backdrop-filter: blur(4px);
+  padding: 10px 12px; border-radius: 6px;
   border: 1px solid #2a3550; min-width: 180px;
 }
 #throttle-bar {
@@ -44,15 +45,55 @@ canvas { display: block; }
 .readouts .unit { color: #7a8aa5; font-size: 10px; }
 
 #hints {
-  position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.7);
+  position: absolute; bottom: 12px; right: 12px;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
   color: #aab; font-family: monospace; font-size: 11px; padding: 8px 12px;
-  border-radius: 4px; z-index: 10; max-width: 360px; line-height: 1.5;
-  display: block; text-align: right;
+  border-radius: 4px; border: 1px solid #1a2238; z-index: 10;
+  max-width: 360px; line-height: 1.5; display: block; text-align: right;
 }
 #hints h3 { font-size: 12px; color: #cdd; margin-top: 6px; }
 #hints h3:first-child { margin-top: 0; }
 
-/* Flight prompt — shown after launch until first stage fires. */
+/* Main menu overlay — shown during INIT over the 3D crash scene. */
+#main-menu {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: 'Segoe UI', system-ui, sans-serif; pointer-events: none;
+}
+#main-menu .menu-content {
+  text-align: center; pointer-events: auto;
+  background: rgba(5,10,20,0.55); backdrop-filter: blur(6px);
+  padding: 48px 64px; border-radius: 16px; border: 1px solid rgba(60,100,160,0.3);
+}
+#main-menu .menu-title {
+  font-size: 42px; font-weight: 300; letter-spacing: 6px; margin: 0 0 8px 0;
+  background: linear-gradient(180deg, #cfe0ff, #5a7bbf);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 2px 24px rgba(0,0,0,0.8);
+}
+#main-menu .menu-subtitle {
+  font-size: 13px; color: #7a8aab; letter-spacing: 3px; text-transform: uppercase;
+  margin: 0 0 32px 0; text-shadow: 0 1px 8px rgba(0,0,0,0.9);
+}
+#main-menu .menu-btn {
+  display: block; width: 240px; margin: 8px auto; padding: 12px 24px;
+  font-size: 15px; font-family: inherit; letter-spacing: 1px;
+  border-radius: 8px; cursor: pointer; transition: all 0.15s ease;
+}
+#main-menu .menu-btn--primary {
+  background: linear-gradient(135deg, #1a3a5a, #2a5a8a); color: #fff;
+  border: 1px solid #3a6aaa; box-shadow: 0 2px 12px rgba(40,90,170,0.3);
+}
+#main-menu .menu-btn--primary:hover {
+  background: linear-gradient(135deg, #2a5a8a, #3a7aba); box-shadow: 0 4px 20px rgba(50,110,200,0.4);
+}
+#main-menu .menu-btn--ghost {
+  background: transparent; color: #6a7a95; border: 1px solid #2a3550;
+}
+#main-menu .menu-btn--ghost:hover { color: #aab; border-color: #4a5a7a; }
+#main-menu .menu-version {
+  font-size: 10px; color: #4a5a70; margin: 24px 0 0 0; font-family: monospace;
+}
 #flight-prompt {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   background: rgba(0,15,30,0.85); color: #cde; font-family: sans-serif;
@@ -65,7 +106,7 @@ canvas { display: block; }
 
 /* Fuel-out guidance — shown when fuel is 0 and no orbit achieved. */
 #fuel-prompt {
-  position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%);
   background: rgba(40,10,10,0.85); color: #f9a; font-family: sans-serif;
   font-size: 13px; padding: 10px 20px; border-radius: 6px;
   border: 1px solid #a44; z-index: 20; text-align: center; display: none; pointer-events: none;
@@ -88,3 +129,47 @@ canvas { display: block; }
 .stage-slot.active .stage-num { color: #4af; }
 .stage-slot .stage-icon { font-size: 14px; line-height: 1; }
 .stage-slot .stage-parts { display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: #889; }
+
+/* Navball — bottom center attitude indicator. */
+#navball {
+  position: absolute; left: 50%; bottom: 12px;
+  transform: translateX(-50%);
+  background: rgba(0,0,10,0.7); backdrop-filter: blur(4px);
+  border: 2px solid #445; border-radius: 50%; z-index: 15;
+}
+
+/* Hold panel — attitude hold mode buttons, bottom center. */
+#hold-panel {
+  position: absolute; left: 50%; bottom: 12px;
+  transform: translateX(-50%);
+  margin-right: 220px; /* sit left of navball */
+  display: none; gap: 6px; padding: 6px 8px;
+  background: rgba(0,0,10,0.7); backdrop-filter: blur(4px);
+  border: 1px solid #2a3550; border-radius: 6px; z-index: 15;
+}
+#hold-panel button {
+  width: 34px; height: 34px; font-size: 18px; line-height: 1;
+  background: rgba(20,30,50,0.9); border: 1px solid #345;
+  border-radius: 4px; cursor: pointer; padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+#hold-panel button:hover {
+  background: rgba(40,60,90,0.9); border-color: #567;
+}
+
+/* Win-states banner — centered achievement/crash notification. */
+#win-banner {
+  position: absolute; top: 30%; left: 50%;
+  transform: translateX(-50%);
+  padding: 20px 40px; background: rgba(0,40,0,0.9);
+  backdrop-filter: blur(6px);
+  color: #9f9; font-family: sans-serif; font-size: 22px;
+  border-radius: 8px; border: 1px solid #2a5a2a;
+  display: none; z-index: 30; text-align: center; pointer-events: auto;
+}
+#win-banner #banner-btn {
+  margin-top: 12px; padding: 8px 16px; background: #163;
+  color: #cdd; border: 1px solid #445; border-radius: 4px;
+  cursor: pointer; display: none;
+}
+#win-banner #banner-btn:hover { background: #274; }

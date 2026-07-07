@@ -16,12 +16,41 @@ import type { PartDef } from './part';
 //   Stage 1 TWR = 700 / (26.1 × 10) ≈ 2.7
 export const FUEL_DENSITY = 0.02; // tonnes per fuel unit
 export const PARTS_CATALOG: PartDef[] = [
-  { id: 'pod', name: 'Command Pod', kind: 'pod', dryMass: 0.8, desc: 'Crew capsule — required to fly', size: [1.2, 1.2, 1.2], color: 0x999999 },
-  { id: 'tank', name: 'Fuel Tank', kind: 'tank', dryMass: 0.25, fuel: 1200, desc: 'Holds fuel for the engine', size: [1.5, 2.5, 1.5], color: 0xdddddd },
-  // Engine 700 kN: TWR for a 2-stage ~26t rocket = 700 / (26 * 10) ≈ 2.7
-  { id: 'engine', name: 'Engine', kind: 'engine', dryMass: 1.0, thrust: 700, desc: 'Burns fuel to provide thrust', size: [1.0, 1.0, 1.0], color: 0x666666 },
-  { id: 'winglet', name: 'Winglet', kind: 'winglet', dryMass: 0.1, desc: 'Aerodynamic fin for stability', size: [2.0, 0.5, 0.5], color: 0xcc4444 },
-  { id: 'strut', name: 'Strut', kind: 'strut', dryMass: 0.05, desc: 'Structural connector / decoupler', size: [0.5, 2.0, 0.5], color: 0x888888 },
+  {
+    id: 'pod', name: 'Command Pod', kind: 'pod', dryMass: 0.8,
+    desc: 'Crew capsule — required to fly', size: [1.2, 1.2, 1.2], color: 0x999999,
+    attachNodes: [
+      { pos: [0, -1.2, 0], dir: [0, -1, 0] }, // bottom — sits on tank
+    ],
+  },
+  {
+    id: 'tank', name: 'Fuel Tank', kind: 'tank', dryMass: 0.25, fuel: 1200,
+    desc: 'Holds fuel for the engine', size: [1.5, 2.5, 1.5], color: 0xdddddd,
+    attachNodes: [
+      { pos: [0, 2.5, 0], dir: [0, 1, 0] },  // top — pod/engine/strut above
+      { pos: [0, -2.5, 0], dir: [0, -1, 0] }, // bottom — engine/strut below
+    ],
+  },
+  {
+    id: 'engine', name: 'Engine', kind: 'engine', dryMass: 1.0, thrust: 700,
+    desc: 'Burns fuel to provide thrust', size: [1.0, 1.0, 1.0], color: 0x666666,
+    attachNodes: [
+      { pos: [0, 1.0, 0], dir: [0, 1, 0] }, // top — attaches to tank/strut above
+    ],
+  },
+  {
+    id: 'winglet', name: 'Winglet', kind: 'winglet', dryMass: 0.1,
+    desc: 'Aerodynamic fin for stability', size: [2.0, 0.5, 0.5], color: 0xcc4444,
+    // No stack nodes — surface-attach only (sticks to side of tank/engine)
+  },
+  {
+    id: 'strut', name: 'Strut', kind: 'strut', dryMass: 0.05,
+    desc: 'Structural connector / decoupler', size: [0.5, 2.0, 0.5], color: 0x888888,
+    attachNodes: [
+      { pos: [0, 2.0, 0], dir: [0, 1, 0] },  // top
+      { pos: [0, -2.0, 0], dir: [0, -1, 0] }, // bottom
+    ],
+  },
 ];
 
 export function getPartDef(id: string): PartDef {

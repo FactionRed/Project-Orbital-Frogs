@@ -62,6 +62,68 @@ function fbm(noise3D: (x: number, y: number, z: number) => number, x: number, y:
 }
 
 /**
+ * Compute the terrain surface radius at a given direction from the planet center.
+ * This replicates the exact same noise + flattening logic used in
+ * buildTerrainGeometry, so the collision surface matches the visual mesh.
+ *
+ * Exported so the flight controller can do raycast-free terrain collision:
+ * each frame, compute the ship's direction from the planet center, get the
+ * surface radius, and if the ship is below it, clamp to the surface and
+ * zero the inward velocity component.
+ *
+ * @param nx,ny,nz — unit direction vector from planet center
+ * @param radius — base planet radius
+ * @param seed — terrain seed (must match the visual mesh)
+ * @param kind — 'planet' or 'moon'
+ * @returns surface radius (base radius + displacement) in world units
+ */
+export function terrainRadiusAt(
+  nx: number, ny: number, nz: number,
+  radius: number, seed: number, kind: BodyKind,
+): number {
+  const noise3D = createNoise3D(mulberry32(seed));
+  const amplitude = radius * 0.04;
+  const baseFreq = kind === 'planet' ? 2.5 : 3.5;
+
+  const h = fbm(noise3D, nx * baseFreq, ny * baseFreq, nz * baseFreq, kind === 'planet' ? 5 : 4);
+  let elevation: number;
+  if (kind === 'planet') {
+    elevation = (h + 1) * 0.5;
+    const seaLevel = 0.45;
+    if (elevation < seaLevel) {
+      elevation = seaLevel - (seaLevel - elevation) * 0.2;
+    }
+  } else {
+    const crater = -Math.abs(noise3D(nx * baseFreq * 2, ny * baseFreq * 2, nz * baseFreq * 2)) * 0.4;
+    elevation = (h + 1) * 0.5 + crater * 0.5;
+  }
+
+  let disp = (elevation - 0.5) * 2 * amplitude;
+
+  // Flatten landing zones (must match buildTerrainGeometry exactly).
+  if (kind === 'planet') {
+    // North pole.
+    const angleFromPole = Math.acos(Math.max(-1, Math.min(1, ny)));
+    const poleRadius = Math.PI / 18;
+    const blend = Math.max(1 - angleFromPole / poleRadius, 0);
+    disp = disp * (1 - blend);
+
+    // Equatorial landing zones.
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const lzx = Math.cos(a), lzy = 0, lzz = Math.sin(a);
+      const dot = nx * lzx + ny * lzy + nz * lzz;
+      const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      const lzRadius = Math.PI / 14;
+      const lzBlend = Math.max(1 - angle / lzRadius, 0);
+      disp = disp * (1 - lzBlend);
+    }
+  }
+
+  return radius + disp;
+}
+
+/**
  * Displace icosahedron vertices by fractal noise to produce terrain.
  * Returns the displaced geometry AND a typed-array of per-vertex elevation
  * (packed into the `uv` attribute's `.y`, read by the shader for biome coloring).
@@ -122,12 +184,36 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
     // sits on the surface visually AND on the collision sphere (base radius).
     // Smoothly blend displacement → 0 within ~10° of the pole. Planets only —
     // moons have no launchpad and keep full craggy terrain everywhere.
+    //
+    // Also flatten around several "landing zone" points on the equator so the
+    // player has flat areas to touch down on after flight (not just the pole).
+    const landingZones: { nx: number; ny: number; nz: number; radius: number }[] = [];
+    if (kind === 'planet') {
+      // 3 flat zones spread around the equator.
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        landingZones.push({
+          nx: Math.cos(a), ny: 0, nz: Math.sin(a),
+          radius: Math.PI / 14, // ~13° flat zone
+        });
+      }
+    }
+
     let finalDisp = disp;
     if (kind === 'planet') {
+      // North pole launchpad.
       const angleFromPole = Math.acos(ny); // 0 at north pole, π/2 at equator
       const poleRadius = Math.PI / 18; // ~10°
       const blend = Math.max(1 - angleFromPole / poleRadius, 0);
       finalDisp = disp * (1 - blend);
+
+      // Equatorial landing zones.
+      for (const lz of landingZones) {
+        const dot = nx * lz.nx + ny * lz.ny + nz * lz.nz;
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+        const lzBlend = Math.max(1 - angle / lz.radius, 0);
+        finalDisp = finalDisp * (1 - lzBlend);
+      }
     }
 
     pos.setXYZ(i, x + nx * finalDisp, y + ny * finalDisp, z + nz * finalDisp);
@@ -319,7 +405,7 @@ export function buildProceduralBody(opts: ProceduralBodyOptions): BuiltProcedura
 
   let atmosphere: THREE.Mesh | null = null;
   if (opts.kind === 'planet') {
-    const atmoGeom = new THREE.SphereGeometry(opts.radius * 1.05, 64, 48);
+    const atmoGeom = new THREE.SphereGeometry(opts.radius * 2.0, 64, 48);
     const atmoMat = buildAtmosphereMaterial(opts, 0x66aaff);
     debugGLSL(`${opts.kind} atmosphere`, atmoMat);
     atmosphere = new THREE.Mesh(atmoGeom, atmoMat);

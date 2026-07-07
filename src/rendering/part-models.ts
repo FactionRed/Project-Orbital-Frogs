@@ -9,26 +9,43 @@ import type { PartDef } from '../entities/part';
  * The mesh is centered at origin and sized to roughly match the part's
  * bounding box (def.size = half-extents).
  *
+ * Visual style draws from ULA cutaway references (Atlas V, Delta IV Heavy,
+ * Vulcan Centaur): ogive nose cones, tank sections with visible cap details,
+ * bell-shaped engine nozzles with mount plates, and truss-like struts.
  * Collision shapes stay as simple boxes (physics), only the visual mesh changes.
  */
 
-// Color palette for parts.
+// Color palette — inspired by ULA rockets: white tanks, dark engines,
+// orange/copper nozzle bells, blue acoustic panels, silver interstages.
 const C = {
-  podWhite: 0xdddddd,
-  podDark: 0x888888,
-  podGlass: 0x4488cc,
-  podAccent: 0xcc4444,
-  tankWhite: 0xeeeeee,
-  tankStripe: 0xcc4444,
-  tankDark: 0x999999,
-  engineDark: 0x444444,
-  engineBell: 0x666666,
-  engineGlow: 0xff6600,
-  engineAccent: 0x884400,
+  // Pod
+  podWhite: 0xe8e8e8,
+  podDark: 0x666666,
+  podGlass: 0x3388cc,
+  podAccent: 0xcc3333,
+  podGrey: 0xaaaaaa,
+  // Tank
+  tankWhite: 0xf0f0f0,
+  tankStripe: 0xcc3333,
+  tankDark: 0x888888,
+  tankSilver: 0xbbbbbb,
+  tankBlue: 0x3355aa, // LOX tank indicator (blue-ish like ULA diagrams)
+  tankOrange: 0xcc6611, // fuel tank indicator (warm tone)
+  // Engine
+  engineDark: 0x333333,
+  engineBell: 0x998866, // copper/bronze bell like RL10/BE-4
+  engineBellDark: 0x554433,
+  engineGlow: 0xff5500,
+  engineAccent: 0x776655,
+  engineMount: 0x555555,
+  // Winglet
   wingletRed: 0xcc3333,
   wingletDark: 0x882222,
-  strutGrey: 0x888888,
+  wingletGrey: 0x888888,
+  // Strut
+  strutGrey: 0x999999,
   strutDark: 0x555555,
+  strutTruss: 0x666666,
 };
 
 /** Build a voxel mesh for a given part definition. */
@@ -61,8 +78,6 @@ export function buildPartMesh(def: PartDef, ghost = false): THREE.Mesh {
   }
 
   // Scale the voxel mesh to exactly match the part's collision half-extents.
-  // The VAB snapping logic uses def.size for placement offsets, so the visual
-  // mesh must fill the same bounding box or parts won't connect flush.
   const bbox = new THREE.Box3().setFromObject(mesh);
   const size = new THREE.Vector3();
   bbox.getSize(size);
@@ -78,67 +93,158 @@ export function buildPartMesh(def: PartDef, ghost = false): THREE.Mesh {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.transparent = true;
     mat.opacity = 0.5;
-    mat.depthWrite = false; // prevents z-fighting with parts behind the ghost
+    mat.depthWrite = false;
   }
 
   return mesh;
 }
 
-/** Command Pod — nose cone shape with a window and accent ring. */
+/**
+ * Command Pod — ogive nose cone (like Atlas V fairing) with:
+ * - Pointed nose tip
+ * - Blue window strip (acoustic panel vibe)
+ * - Cylindrical lower section (service module)
+ * - Dark base ring (payload adapter)
+ */
 function buildPod(m: VoxelModel): THREE.Mesh {
-  // Cone from wide base (radius 3) to pointed top.
-  m.addCone(0, 0, 3, -3, 3, C.podWhite);
-  // Darker base ring.
-  m.addBox(-3, -3, -3, 3, -3, 3, C.podDark);
-  // Window strip (blue voxels on the +Z face).
-  m.addBox(-1, 1, 3, 1, 2, 3, C.podGlass);
-  // Red accent ring near top.
-  m.addBox(-1, 2, -3, 1, 2, 3, C.podAccent);
+  // Nose cone — ogive shape: starts wide, tapers to a point.
+  // Use a cone from radius 3 at base to radius 0 at tip.
+  m.addCone(0, 0, 3, 0, 5, C.podWhite);
+  // Blunt tip cap (a single voxel for a rounded nose).
+  m.add(0, 5, 0, C.podGrey);
+
+  // Cylindrical lower section (service module / adapter).
+  m.addCylinder(0, 0, 3, -3, 0, C.podGrey);
+
+  // Window strip — blue voxels in a ring at mid-height.
+  for (let a = 0; a < 8; a++) {
+    const ang = (a / 8) * Math.PI * 2;
+    const wx = Math.round(Math.cos(ang) * 2.5);
+    const wz = Math.round(Math.sin(ang) * 2.5);
+    m.add(wx, 2, wz, C.podGlass);
+  }
+
+  // Red accent ring (visibility marker like ULA markings).
+  for (let a = 0; a < 8; a++) {
+    const ang = (a / 8) * Math.PI * 2;
+    const wx = Math.round(Math.cos(ang) * 2.5);
+    const wz = Math.round(Math.sin(ang) * 2.5);
+    m.add(wx, 1, wz, C.podAccent);
+  }
+
+  // Dark base ring (payload adapter / interstage).
+  m.addCylinder(0, 0, 3, -4, -3, C.podDark);
+
   return m.buildMesh();
 }
 
-/** Fuel Tank — cylinder with stripes. */
+/**
+ * Fuel Tank — ULA-style propellant section with:
+ * - White main body cylinder
+ * - Red stripe bands at top and bottom (ULA marking bands)
+ * - Silver/dark end caps (common bulkhead suggestion)
+ * - Subtle blue tint on upper portion (LOX tank indicator)
+ */
 function buildTank(m: VoxelModel): THREE.Mesh {
-  // Main body — tall cylinder.
+  // Main body — tall cylinder, white.
   m.addCylinder(0, 0, 3, -5, 5, C.tankWhite);
-  // Red stripes at top and bottom.
-  m.addCylinder(0, 0, 3, -5, -4, C.tankStripe);
+
+  // Upper section — slight blue tint (LOX tank area, like ULA cutaways).
+  m.addCylinder(0, 0, 3, 2, 5, C.tankBlue);
+
+  // Lower section — warm tint (fuel tank area).
+  m.addCylinder(0, 0, 3, -5, -2, C.tankOrange);
+
+  // Red stripe bands at top and bottom (ULA-style marking bands).
   m.addCylinder(0, 0, 3, 4, 5, C.tankStripe);
-  // Darker end caps.
-  m.addBox(-3, -5, -3, 3, -5, 3, C.tankDark);
-  m.addBox(-3, 5, -3, 3, 5, 3, C.tankDark);
+  m.addCylinder(0, 0, 3, -5, -4, C.tankStripe);
+
+  // Silver end caps (common bulkhead suggestion).
+  m.addCylinder(0, 0, 3, 5, 5, C.tankSilver);
+  m.addCylinder(0, 0, 3, -5, -5, C.tankSilver);
+
+  // Center band — darker ring (weld line / common bulkhead).
+  m.addCylinder(0, 0, 3, 0, 0, C.tankDark);
+
   return m.buildMesh();
 }
 
-/** Engine — bell shape with nozzle glow. */
+/**
+ * Engine — ULA-style bell nozzle assembly with:
+ * - Dark mount block (interstage adapter)
+ * - Copper/bronze bell cone (wide at bottom, narrows up)
+ * - Orange glow at nozzle exit
+ * - Side accent plates (engine fairing)
+ */
 function buildEngine(m: VoxelModel): THREE.Mesh {
-  // Upper mount block (connects to tank).
-  m.addBox(-2, 1, -2, 2, 3, 2, C.engineDark);
-  // Bell cone — narrows upward, widens downward.
-  m.addCone(0, 0, 3, -3, 1, C.engineBell);
-  // Orange glow at the nozzle base.
-  m.addBox(-2, -3, -2, 2, -3, 2, C.engineGlow);
-  // Side accent strips.
+  // Mount block — connects to tank above (interstage adapter).
+  m.addBox(-2, 2, -2, 2, 3, 2, C.engineMount);
+
+  // Bell cone — inverted: wide at bottom (nozzle exit), narrow at top (throat).
+  // This matches real engine bells (RL10, BE-4, RD-180).
+  m.addCone(0, 0, 3, -3, 2, C.engineBell);
+
+  // Darker bands on the bell (cooling channel suggestion).
+  m.addCylinder(0, 0, 3, -3, -2, C.engineBellDark);
+  m.addCylinder(0, 0, 2, 0, 1, C.engineBellDark);
+
+  // Orange glow at the nozzle exit (exhaust plume suggestion).
+  m.addCylinder(0, 0, 3, -3, -3, C.engineGlow);
+
+  // Side accent plates (engine fairing / structural support).
   m.addBox(-2, 0, -2, -2, 2, 2, C.engineAccent);
   m.addBox(2, 0, -2, 2, 2, 2, C.engineAccent);
+
+  // Small detail: center feedline suggestion (dark vertical strip).
+  m.add(0, 1, 0, C.engineDark);
+  m.add(0, 0, 0, C.engineDark);
+
   return m.buildMesh();
 }
 
-/** Winglet — triangular fin. */
+/**
+ * Winglet — aerodynamic fin with:
+ * - Triangular planform (swept back like ULA SRB fins)
+ * - Red body with dark leading edge
+ * - Grey root attachment
+ */
 function buildWinglet(m: VoxelModel): THREE.Mesh {
-  // Triangular fin pointing up and outward.
+  // Main fin body — triangular, sweeping up and out.
   m.addFin(0, -2, -1, 5, 4, 2, C.wingletRed);
-  // Dark leading edge.
+
+  // Dark leading edge (the front of the fin).
   m.addFin(0, -2, -1, 5, 1, 2, C.wingletDark);
+
+  // Grey root attachment (where it bolts to the core).
+  m.addBox(0, -3, -1, 1, -2, 1, C.wingletGrey);
+
   return m.buildMesh();
 }
 
-/** Strut — thin connector. */
+/**
+ * Strut — ULA-style truss/interstage with:
+ * - Thin vertical support bars (truss-like, not solid wall)
+ * - Dark end caps (attachment points)
+ * - Cross-bracing pattern (structural truss suggestion)
+ */
 function buildStrut(m: VoxelModel): THREE.Mesh {
-  // Thin vertical bar.
-  m.addBox(0, -4, 0, 0, 4, 0, C.strutGrey);
-  // Dark end caps.
+  // Four vertical corner posts (truss frame).
+  m.addBox(-1, -4, -1, -1, 4, -1, C.strutGrey);
+  m.addBox(1, -4, -1, 1, 4, -1, C.strutGrey);
+  m.addBox(-1, -4, 1, -1, 4, 1, C.strutGrey);
+  m.addBox(1, -4, 1, 1, 4, 1, C.strutGrey);
+
+  // Cross-bracing — diagonal pattern on the sides (truss suggestion).
+  for (let y = -3; y <= 3; y += 2) {
+    m.add(-1, y, 0, C.strutTruss);
+    m.add(1, y, 0, C.strutTruss);
+    m.add(0, y, -1, C.strutTruss);
+    m.add(0, y, 1, C.strutTruss);
+  }
+
+  // Dark end caps (attachment rings / decoupler suggestion).
   m.addBox(-1, -4, -1, 1, -4, 1, C.strutDark);
   m.addBox(-1, 4, -1, 1, 4, 1, C.strutDark);
+
   return m.buildMesh();
 }

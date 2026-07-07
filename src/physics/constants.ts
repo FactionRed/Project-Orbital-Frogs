@@ -39,19 +39,19 @@ export const MOON = {
 export const SUN_DIRECTION = new Float64Array([1, 0.35, 0.6]);
 
 // Atmosphere: exponential density model for aerodynamic drag during ascent.
-// The planet has a thin atmosphere that creates a mild speed-vs-altitude ceiling
-// — going too fast too low wastes a little delta-v to drag, which makes gravity
-// turns worthwhile. The drag is deliberately LIGHT: it costs ~30-60 m/s of delta-v
-// during a straight-up ascent, not enough to prevent flight, just enough that a
-// gravity turn (ascend through the thick air, then pitch east) is more efficient.
+// The atmosphere extends to 3000m (planet radius) with a 500m scale height,
+// so drag affects a significant portion of the coast phase — not just the
+// first 1km. This keeps failed-launch coast times under ~4 minutes (vs 11+
+// with a thin atmosphere) and makes Q meaningful during ascent.
 //
 // Density profile: ρ(h) = surfaceDensity × exp(-h / scaleHeight), clamped to 0
-// above `height`. The atmosphere is thin (1km) relative to the 3000m planet.
+// above `height`. Going too fast too low wastes delta-v to drag; a gravity turn
+// (pitch east early) is more efficient than a straight-up blast.
 export const ATMOSPHERE = {
-  height: 1000, // m above planet surface — top of atmosphere (drag = 0 above this)
-  scaleHeight: 200, // m — exponential decay rate of air density
-  surfaceDensity: 0.01, // game force units — light drag that penalizes low/fast
-  dragFactor: 0.02, // combined Cd × A — low so terminal velocity > orbital velocity
+  height: 3000, // m above planet surface — top of atmosphere
+  scaleHeight: 500, // m — exponential decay rate of air density
+  surfaceDensity: 0.05, // game force units — meaningful drag at low altitudes
+  dragFactor: 0.1, // combined Cd × A — tuned so Q matters during ascent
 };
 
 // Moon's sphere of influence: a * (m_body / m_parent)^(2/5).
