@@ -472,6 +472,14 @@ export class FlightController {
     // The dt is already capped at 1/60 in main.ts to keep integration accurate.
     this.world.step(dt);
 
+    // Manual terrain collision: clamp the ship to the visible terrain surface.
+    // The sphere collider catches the ship at the base radius, but terrain peaks
+    // are above that. This code checks the ship's position against the actual
+    // terrain height (computed from the same noise function as the visual mesh)
+    // and pushes the ship up if it's below the surface, zeroing the inward
+    // velocity component so it doesn't sink.
+    this.clampToTerrain();
+
     // Sync meshes: each part's world transform = body transform * (localOffset, localQuat).
     for (const sb of this.ship.shipBodies) {
       for (const meta of sb.parts.values()) {
@@ -498,5 +506,57 @@ export class FlightController {
     // Keep the day/night terminator + atmosphere sunlit-limb in sync.
     this.planet.updateSun(this.sunDir);
     this.moon.updateSun(this.sunDir);
+  }
+
+  /**
+   * Manual terrain collision: for each celestial body (planet + moon), check
+   * if the ship is below the terrain surface. If so, clamp it to the surface
+   * and zero the inward (downward) velocity component.
+   *
+   * This runs AFTER world.step(dt), so it overrides any cannon-es collision
+   * response. The sphere collider still catches the ship at the base radius
+   * (preventing fall-through to the planet core), but this clamping ensures
+   * the ship sits on top of terrain peaks, not inside them.
+   */
+  private clampToTerrain(): void {
+    const bodies = [this.planet, this.moon];
+    for (const body of bodies) {
+      for (const sb of this.ship.shipBodies) {
+        if (sb.body.type !== CANNON.Body.DYNAMIC) continue;
+        const dx = sb.body.position.x - body.position.x;
+        const dy = sb.body.position.y - body.position.y;
+        const dz = sb.body.position.z - body.position.z;
+        const dist = Math.hypot(dx, dy, dz);
+        if (dist < 1e-3) continue;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const nz = dz / dist;
+        const surfaceR = body.terrainRadiusAt(nx, ny, nz);
+        // Only clamp if the ship is clearly below the terrain (more than 0.5m).
+        // A small tolerance prevents the clamping from interfering with normal
+        // liftoff when the ship is resting at the surface.
+        if (dist < surfaceR - 0.5) {
+          // Ship is below terrain — push it to the surface.
+          sb.body.position.set(
+            body.position.x + nx * surfaceR,
+            body.position.y + ny * surfaceR,
+            body.position.z + nz * surfaceR,
+          );
+          // Zero the inward velocity component (but keep tangential for sliding).
+          const vx = sb.body.velocity.x;
+          const vy = sb.body.velocity.y;
+          const vz = sb.body.velocity.z;
+          const radialVel = vx * nx + vy * ny + vz * nz; // >0 = moving away, <0 = sinking in
+          if (radialVel < 0) {
+            // Remove the inward component, keep the tangential.
+            sb.body.velocity.set(
+              vx - radialVel * nx,
+              vy - radialVel * ny,
+              vz - radialVel * nz,
+            );
+          }
+        }
+      }
+    }
   }
 }

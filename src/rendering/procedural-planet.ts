@@ -62,6 +62,68 @@ function fbm(noise3D: (x: number, y: number, z: number) => number, x: number, y:
 }
 
 /**
+ * Compute the terrain surface radius at a given direction from the planet center.
+ * This replicates the exact same noise + flattening logic used in
+ * buildTerrainGeometry, so the collision surface matches the visual mesh.
+ *
+ * Exported so the flight controller can do raycast-free terrain collision:
+ * each frame, compute the ship's direction from the planet center, get the
+ * surface radius, and if the ship is below it, clamp to the surface and
+ * zero the inward velocity component.
+ *
+ * @param nx,ny,nz — unit direction vector from planet center
+ * @param radius — base planet radius
+ * @param seed — terrain seed (must match the visual mesh)
+ * @param kind — 'planet' or 'moon'
+ * @returns surface radius (base radius + displacement) in world units
+ */
+export function terrainRadiusAt(
+  nx: number, ny: number, nz: number,
+  radius: number, seed: number, kind: BodyKind,
+): number {
+  const noise3D = createNoise3D(mulberry32(seed));
+  const amplitude = radius * 0.04;
+  const baseFreq = kind === 'planet' ? 2.5 : 3.5;
+
+  const h = fbm(noise3D, nx * baseFreq, ny * baseFreq, nz * baseFreq, kind === 'planet' ? 5 : 4);
+  let elevation: number;
+  if (kind === 'planet') {
+    elevation = (h + 1) * 0.5;
+    const seaLevel = 0.45;
+    if (elevation < seaLevel) {
+      elevation = seaLevel - (seaLevel - elevation) * 0.2;
+    }
+  } else {
+    const crater = -Math.abs(noise3D(nx * baseFreq * 2, ny * baseFreq * 2, nz * baseFreq * 2)) * 0.4;
+    elevation = (h + 1) * 0.5 + crater * 0.5;
+  }
+
+  let disp = (elevation - 0.5) * 2 * amplitude;
+
+  // Flatten landing zones (must match buildTerrainGeometry exactly).
+  if (kind === 'planet') {
+    // North pole.
+    const angleFromPole = Math.acos(Math.max(-1, Math.min(1, ny)));
+    const poleRadius = Math.PI / 18;
+    const blend = Math.max(1 - angleFromPole / poleRadius, 0);
+    disp = disp * (1 - blend);
+
+    // Equatorial landing zones.
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const lzx = Math.cos(a), lzy = 0, lzz = Math.sin(a);
+      const dot = nx * lzx + ny * lzy + nz * lzz;
+      const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      const lzRadius = Math.PI / 14;
+      const lzBlend = Math.max(1 - angle / lzRadius, 0);
+      disp = disp * (1 - lzBlend);
+    }
+  }
+
+  return radius + disp;
+}
+
+/**
  * Displace icosahedron vertices by fractal noise to produce terrain.
  * Returns the displaced geometry AND a typed-array of per-vertex elevation
  * (packed into the `uv` attribute's `.y`, read by the shader for biome coloring).

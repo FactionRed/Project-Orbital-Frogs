@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { G } from './constants';
 import { COLLISION_GROUP, CELESTIAL_COLLISION_MASK } from './collision-groups';
-import { buildProceduralBody, type BodyKind } from '../rendering/procedural-planet';
+import { buildProceduralBody, terrainRadiusAt, type BodyKind } from '../rendering/procedural-planet';
 
 export interface CelestialBodyData {
   name: string;
@@ -24,6 +24,8 @@ export class CelestialBody {
   readonly atmosphere: THREE.Mesh | null;
   /** Current world-space center position. */
   position = new THREE.Vector3(0, 0, 0);
+  /** Function to compute terrain surface radius at a direction — for collision. */
+  readonly terrainRadiusAt: (nx: number, ny: number, nz: number) => number;
   private orbitRadius = 0;
   private orbitPeriod = 0;
   private setSunDirection: (dir: THREE.Vector3) => void;
@@ -54,22 +56,20 @@ export class CelestialBody {
     this.mesh.position.copy(this.position);
     if (this.atmosphere) this.atmosphere.position.copy(this.position);
 
-    // Cannon static body — Trimesh collider built from the displaced terrain
-    // geometry, so collision matches the visible surface exactly. Ships land
-    // on mountains and valleys instead of clipping through to a plain sphere.
-    const geom = built.terrainGeometry;
-    const posAttr = geom.attributes.position as THREE.BufferAttribute;
-    const vertices: number[] = [];
-    for (let i = 0; i < posAttr.count; i++) {
-      vertices.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-    }
-    const indices: number[] = geom.index
-      ? Array.from(geom.index.array)
-      : Array.from({ length: posAttr.count }, (_, i) => i);
-    const trimesh = new CANNON.Trimesh(vertices, indices);
+    // Terrain height function — replicates the exact noise + flattening used
+    // to build the visual mesh. Used by the flight controller for manual
+    // terrain collision (clamping the ship to the surface each frame).
+    const kind = data.kind ?? 'planet';
+    const seed = data.seed ?? 1;
+    this.terrainRadiusAt = (nx, ny, nz) => terrainRadiusAt(nx, ny, nz, data.radius, seed, kind);
+
+    // Cannon static body — sphere collider at the base radius as a fallback.
+    // The flight controller also does manual terrain clamping each frame
+    // using terrainRadiusAt, so the ship matches the visible terrain.
+    const shape = new CANNON.Sphere(data.radius);
     this.cannonBody = new CANNON.Body({
       mass: 0, // static
-      shape: trimesh,
+      shape,
       collisionFilterGroup: COLLISION_GROUP.CELESTIAL,
       collisionFilterMask: CELESTIAL_COLLISION_MASK,
     });
