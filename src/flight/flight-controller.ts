@@ -9,9 +9,11 @@ import { sphereOfInfluence } from '../physics/orbit-math';
 import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
 import { PLANET, MOON, SUN_DIRECTION } from '../physics/constants';
+import { FUEL_DENSITY } from '../entities/parts-catalog';
 
-// Tuned so one tank (400 fuel) at full throttle (one 40kN engine) burns for
-// ~30s: burn = 40 * 1 * dt * 0.33 ≈ 13.3 fuel/s → 400 / 13.3 ≈ 30s of thrust.
+// Tuned so one tank (1200 fuel) at full throttle (one 700kN engine) burns for
+// ~5.2s: burn = 700 * 1 * dt * 0.33 ≈ 231 fuel/s → 1200 / 231 ≈ 5.2s of thrust.
+// With fuel mass (24t), the Tsiolkovsky equation gives meaningful delta-v.
 const FUEL_BURN_RATE = 0.33;
 
 export type HoldMode = 'off' | 'prograde' | 'retrograde' | 'normal' | 'antinormal' | 'radialin' | 'radialout';
@@ -384,12 +386,20 @@ export class FlightController {
         const fuelBurn = totalThrust * this.throttle * dt * FUEL_BURN_RATE;
         this.ship.fuel = Math.max(0, this.ship.fuel - fuelBurn);
 
+        // Reduce body mass as fuel is burned (fuel has mass via FUEL_DENSITY).
+        // updateMassProperties() recalculates inertia tensor from new mass.
+        const root = this.ship.rootBody;
+        const massLoss = fuelBurn * FUEL_DENSITY;
+        if (massLoss > 0 && root.mass > massLoss) {
+          root.mass -= massLoss;
+          root.updateMassProperties();
+        }
+
         // Apply force along the root body's local +Y (engines push "up").
-        // Sum onto the root body so a single rigid body accelerates as one.
         const f = totalThrust * this.throttle;
         const localForce = new CANNON.Vec3(0, f, 0);
-        const worldForce = this.ship.rootBody.quaternion.vmult(localForce);
-        this.ship.rootBody.applyForce(worldForce, new CANNON.Vec3(0, 0, 0));
+        const worldForce = root.quaternion.vmult(localForce);
+        root.applyForce(worldForce, new CANNON.Vec3(0, 0, 0));
       }
     }
 

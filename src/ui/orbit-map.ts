@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import type { FlightController } from '../flight/flight-controller';
 
-const TRAJECTORY_STEPS = 1500;
+const TRAJECTORY_STEPS = 2100;
 const TRAJECTORY_DT = 0.5;
 
 /**
@@ -206,10 +206,11 @@ export class OrbitMap {
     this.trajectoryLine = new THREE.Line(geom, mat);
     this.scene.add(this.trajectoryLine);
 
-    // Place Ap/Pe markers on the trajectory line.
-    this.placeMarker(this.apMarker, apX, apY, apZ, 0xff4444, 60);
+    // Place Ap/Pe markers on the trajectory line (size scales with zoom).
+    const markerSize = Math.max(30, this.mapDistance * 0.008);
+    this.placeMarker(this.apMarker, apX, apY, apZ, 0xff4444, markerSize);
     this.apMarker = this.lastCreatedMarker;
-    this.placeMarker(this.peMarker, peX, peY, peZ, 0x4444ff, 60);
+    this.placeMarker(this.peMarker, peX, peY, peZ, 0x4444ff, markerSize);
     this.peMarker = this.lastCreatedMarker;
   }
 
@@ -231,8 +232,13 @@ export class OrbitMap {
   }
 
   private createShipMarker(): void {
-    if (this.shipMarker) return;
-    const geom = new THREE.SphereGeometry(30, 8, 8);
+    if (this.shipMarker) {
+      this.scene.remove(this.shipMarker);
+      this.shipMarker.geometry.dispose();
+      (this.shipMarker.material as THREE.Material).dispose();
+    }
+    const size = Math.max(20, this.mapDistance * 0.005);
+    const geom = new THREE.SphereGeometry(size, 8, 8);
     const mat = new THREE.MeshBasicMaterial({ color: 0x44ddff });
     this.shipMarker = new THREE.Mesh(geom, mat);
     this.scene.add(this.shipMarker);

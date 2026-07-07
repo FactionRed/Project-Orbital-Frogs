@@ -17,6 +17,7 @@ export type Voxel = {
 
 export class VoxelModel {
   private voxels: Voxel[] = [];
+  private occupied = new Set<string>(); // dedup grid: "x,y,z"
   /** Size of each voxel cube in world units. */
   readonly voxelSize: number;
 
@@ -26,6 +27,14 @@ export class VoxelModel {
 
   /** Add a single voxel at grid coordinates (x, y, z) with a color. */
   add(x: number, y: number, z: number, color: number): this {
+    const key = `${x},${y},${z}`;
+    if (this.occupied.has(key)) {
+      // Overwrite color of existing voxel (last write wins).
+      const existing = this.voxels.find(v => v.x === x && v.y === y && v.z === z);
+      if (existing) existing.color = color;
+      return this;
+    }
+    this.occupied.add(key);
     this.voxels.push({ x, y, z, color });
     return this;
   }
@@ -108,9 +117,8 @@ export class VoxelModel {
     const offY = (minY + maxY) / 2;
     const offZ = (minZ + maxZ) / 2;
 
-    // Build a set of occupied voxels for face culling.
-    const occ = new Set<string>();
-    for (const v of this.voxels) occ.add(`${v.x},${v.y},${v.z}`);
+    // Build a set of occupied voxels for face culling (reuse the dedup set).
+    const occ = this.occupied;
 
     const vs: number[] = [];      // vertices
     const cols: number[] = [];    // vertex colors (r,g,b floats 0-1)

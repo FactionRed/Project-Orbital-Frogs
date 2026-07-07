@@ -20,7 +20,7 @@ export class FlightCamera {
   /** Distance from the ship, in meters. */
   private distance = 35;
   private readonly minDistance = 6;
-  private readonly maxDistance = 15000; // must exceed planet radius (3000m)
+  private readonly maxDistance = 50000; // must see moon orbit (40000m)
 
   /** Smoothed camera target (ship position) so the view doesn't snap on teleport. */
   private targetPos = new THREE.Vector3();

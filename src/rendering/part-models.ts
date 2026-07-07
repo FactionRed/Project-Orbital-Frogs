@@ -78,6 +78,7 @@ export function buildPartMesh(def: PartDef, ghost = false): THREE.Mesh {
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.transparent = true;
     mat.opacity = 0.5;
+    mat.depthWrite = false; // prevents z-fighting with parts behind the ghost
   }
 
   return mesh;

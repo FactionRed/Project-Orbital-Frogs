@@ -3,6 +3,7 @@ import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
+import { FUEL_DENSITY } from '../entities/parts-catalog';
 import { COLLISION_GROUP, SHIP_COLLISION_MASK } from '../physics/collision-groups';
 import type { PartDef } from '../entities/part';
 
@@ -60,7 +61,13 @@ export function buildShipPhysics(design: ShipDesign): BuiltShip {
     design.parts.reduce((s, p) => s + p.position.z, 0) / Math.max(1, design.parts.length);
 
   const body = new CANNON.Body({
-    mass: design.parts.reduce((s, p) => s + getPartDef(p.partId).dryMass, 0),
+    // Mass = dry mass of all parts + fuel mass (fuel × density).
+    // Fuel has mass so the Tsiolkovsky rocket equation works and staging
+    // actually matters — lighter ships accelerate faster as they burn fuel.
+    mass: design.parts.reduce((s, p) => {
+      const def = getPartDef(p.partId);
+      return s + def.dryMass + (def.fuel ?? 0) * FUEL_DENSITY;
+    }, 0),
     collisionFilterGroup: COLLISION_GROUP.SHIP,
     collisionFilterMask: SHIP_COLLISION_MASK,
     // NO linear damping — there's no atmosphere in this prototype, so velocity
