@@ -51,3 +51,40 @@ canvas { display: block; }
 }
 #hints h3 { font-size: 12px; color: #cdd; margin-top: 6px; }
 #hints h3:first-child { margin-top: 0; }
+
+/* Flight prompt — shown after launch until first stage fires. */
+#flight-prompt {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(0,15,30,0.85); color: #cde; font-family: sans-serif;
+  font-size: 16px; padding: 14px 28px; border-radius: 8px;
+  border: 1px solid #3a5a8a; z-index: 20; text-align: center;
+  display: none; pointer-events: none; animation: pulse-prompt 1.5s ease-in-out infinite;
+}
+#flight-prompt kbd { background: #234; border: 1px solid #456; border-radius: 3px; padding: 2px 6px; font-family: monospace; font-weight: bold; color: #fff; }
+@keyframes pulse-prompt { 0%, 100% { opacity: 0.85; } 50% { opacity: 1; box-shadow: 0 0 16px rgba(68,221,255,0.4); } }
+
+/* Fuel-out guidance — shown when fuel is 0 and no orbit achieved. */
+#fuel-prompt {
+  position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+  background: rgba(40,10,10,0.85); color: #f9a; font-family: sans-serif;
+  font-size: 13px; padding: 10px 20px; border-radius: 6px;
+  border: 1px solid #a44; z-index: 20; text-align: center; display: none; pointer-events: none;
+}
+#fuel-prompt kbd { background: #643; border: 1px solid #865; border-radius: 3px; padding: 1px 5px; font-family: monospace; font-weight: bold; color: #fff; }
+
+/* Staging display — left side during flight. */
+#staging-panel {
+  position: absolute; top: 50%; left: 12px; transform: translateY(-50%);
+  display: none; flex-direction: column-reverse; gap: 6px;
+  z-index: 10; pointer-events: none;
+}
+.stage-slot {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(5,10,20,0.78); border: 1px solid #2a3550; border-radius: 4px;
+  padding: 6px 8px; min-width: 80px; font-family: monospace; font-size: 11px; color: #cdd;
+}
+.stage-slot.active { border-color: #4af; box-shadow: 0 0 8px rgba(68,170,255,0.3); }
+.stage-slot .stage-num { font-weight: bold; color: #7a8aa5; width: 16px; text-align: center; }
+.stage-slot.active .stage-num { color: #4af; }
+.stage-slot .stage-icon { font-size: 14px; line-height: 1; }
+.stage-slot .stage-parts { display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: #889; }

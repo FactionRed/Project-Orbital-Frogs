@@ -18,7 +18,10 @@ export class OrbitMap {
   visible = false;
   private overlay: HTMLElement;
   private apPeText: HTMLElement;
+  // Persistent objects — created once, updated in-place each frame (no per-frame
+  // create/dispose cycle which caused flicker during zoom).
   private trajectoryLine: THREE.Line | null = null;
+  private trajectoryGeom: THREE.BufferGeometry | null = null;
   private apMarker: THREE.Mesh | null = null;
   private peMarker: THREE.Mesh | null = null;
   private shipMarker: THREE.Mesh | null = null;
@@ -153,6 +156,9 @@ export class OrbitMap {
     if (this.shipMarker) {
       this.shipMarker.position.set(sp.x, sp.y, sp.z);
     }
+
+    // Scale markers smoothly based on current zoom (no recreate flicker).
+    this.updateMarkerScales();
   }
 
   private recomputeTrajectory(flight: FlightController): void {
@@ -169,8 +175,8 @@ export class OrbitMap {
     let vy = root.velocity.y;
     let vz = root.velocity.z;
 
-    const pts: THREE.Vector3[] = [];
-    // Track apoapsis / periapsis positions for markers.
+    // Reuse a flat array to avoid per-frame allocation.
+    const pts: number[] = [];
     let apR = -Infinity;
     let peR = Infinity;
     let apX = 0, apY = 0, apZ = 0;
@@ -184,11 +190,10 @@ export class OrbitMap {
       const r = Math.sqrt(r2);
       if (r < dom.data.radius) break;
 
-      // Track Ap (max r) and Pe (min r) positions.
       if (r > apR) { apR = r; apX = px; apY = py; apZ = pz; }
       if (r < peR) { peR = r; peX = px; peY = py; peZ = pz; }
 
-      pts.push(new THREE.Vector3(px, py, pz));
+      pts.push(px, py, pz);
       const a = -mu / (r2 * r);
       vx += a * rx * TRAJECTORY_DT;
       vy += a * ry * TRAJECTORY_DT;
@@ -198,37 +203,53 @@ export class OrbitMap {
       pz += vz * TRAJECTORY_DT;
     }
 
-    this.clearTrajectory();
-    if (pts.length < 2) return;
+    if (pts.length < 6) return;
 
-    const geom = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({ color: 0x33ff66, transparent: true, opacity: 0.7 });
-    this.trajectoryLine = new THREE.Line(geom, mat);
-    this.scene.add(this.trajectoryLine);
+    // Update existing geometry in-place (no dispose/recreate).
+    const positions = new Float32Array(pts);
+    if (!this.trajectoryGeom) {
+      this.trajectoryGeom = new THREE.BufferGeometry();
+      this.trajectoryGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({ color: 0x33ff66, transparent: true, opacity: 0.7 });
+      this.trajectoryLine = new THREE.Line(this.trajectoryGeom, mat);
+      this.scene.add(this.trajectoryLine);
+    } else {
+      this.trajectoryGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      this.trajectoryGeom.computeBoundingSphere();
+    }
 
-    // Place Ap/Pe markers on the trajectory line (size scales with zoom).
-    const markerSize = Math.max(30, this.mapDistance * 0.008);
-    this.placeMarker(this.apMarker, apX, apY, apZ, 0xff4444, markerSize);
-    this.apMarker = this.lastCreatedMarker;
-    this.placeMarker(this.peMarker, peX, peY, peZ, 0x4444ff, markerSize);
-    this.peMarker = this.lastCreatedMarker;
+    // Update marker positions and scales in-place.
+    this.ensureMarker(this.apMarker, 0xff4444);
+    if (this.lastCreatedMarker) this.apMarker = this.lastCreatedMarker;
+    if (this.apMarker) this.apMarker.position.set(apX, apY, apZ);
+
+    this.ensureMarker(this.peMarker, 0x4444ff);
+    if (this.lastCreatedMarker) this.peMarker = this.lastCreatedMarker;
+    if (this.peMarker) this.peMarker.position.set(peX, peY, peZ);
   }
 
   private lastCreatedMarker: THREE.Mesh | null = null;
 
-  private placeMarker(existing: THREE.Mesh | null, x: number, y: number, z: number, color: number, size: number): void {
-    // Remove existing if present — we recreate each frame.
+  /** Create marker if it doesn't exist; do nothing if it already does. */
+  private ensureMarker(existing: THREE.Mesh | null, color: number): void {
     if (existing) {
-      this.scene.remove(existing);
-      existing.geometry.dispose();
-      (existing.material as THREE.Material).dispose();
+      this.lastCreatedMarker = null;
+      return;
     }
-    const geom = new THREE.SphereGeometry(size, 8, 8);
+    const geom = new THREE.SphereGeometry(1, 8, 8);
     const mat = new THREE.MeshBasicMaterial({ color });
     const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.set(x, y, z);
     this.scene.add(mesh);
     this.lastCreatedMarker = mesh;
+  }
+
+  /** Update marker scales based on current zoom distance (in-place, no recreate). */
+  private updateMarkerScales(): void {
+    const markerSize = Math.max(30, this.mapDistance * 0.008);
+    const shipSize = Math.max(20, this.mapDistance * 0.005);
+    if (this.apMarker) this.apMarker.scale.setScalar(markerSize);
+    if (this.peMarker) this.peMarker.scale.setScalar(markerSize);
+    if (this.shipMarker) this.shipMarker.scale.setScalar(shipSize);
   }
 
   private createShipMarker(): void {
@@ -237,8 +258,7 @@ export class OrbitMap {
       this.shipMarker.geometry.dispose();
       (this.shipMarker.material as THREE.Material).dispose();
     }
-    const size = Math.max(20, this.mapDistance * 0.005);
-    const geom = new THREE.SphereGeometry(size, 8, 8);
+    const geom = new THREE.SphereGeometry(1, 8, 8);
     const mat = new THREE.MeshBasicMaterial({ color: 0x44ddff });
     this.shipMarker = new THREE.Mesh(geom, mat);
     this.scene.add(this.shipMarker);
@@ -251,6 +271,7 @@ export class OrbitMap {
       (this.trajectoryLine.material as THREE.Material).dispose();
       this.trajectoryLine = null;
     }
+    this.trajectoryGeom = null;
     if (this.apMarker) {
       this.scene.remove(this.apMarker);
       this.apMarker.geometry.dispose();

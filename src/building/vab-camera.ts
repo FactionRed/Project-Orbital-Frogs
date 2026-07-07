@@ -20,40 +20,58 @@ export class VabCamera {
   /** Ground plane (Y=0) used for dragging parts in the build space. */
   readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
+  private dom: HTMLElement | null = null;
+  private rotating = false;
+  private lastX = 0;
+  private lastY = 0;
+
+  // Bound handlers (so we can remove them on detach).
+  private onDown = (e: PointerEvent) => {
+    if (e.button === 2) {
+      this.rotating = true;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
+    }
+  };
+  private onMove = (e: PointerEvent) => {
+    if (!this.rotating) return;
+    const dx = e.clientX - this.lastX;
+    const dy = e.clientY - this.lastY;
+    this.lastX = e.clientX;
+    this.lastY = e.clientY;
+    this.spherical.theta -= dx * 0.01;
+    this.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.spherical.phi - dy * 0.01));
+    this.updateCamera();
+  };
+  private onUp = () => {
+    this.rotating = false;
+  };
+  private onCtx = (e: Event) => e.preventDefault();
+  private onWheel = (e: WheelEvent) => {
+    this.spherical.radius = Math.max(15, Math.min(300, this.spherical.radius + e.deltaY * 0.05));
+    this.updateCamera();
+    e.preventDefault();
+  };
+
   attach(dom: HTMLElement): void {
-    let rotating = false;
-    let lastX = 0;
-    let lastY = 0;
-    dom.addEventListener('pointerdown', (e) => {
-      if (e.button === 2) {
-        rotating = true;
-        lastX = e.clientX;
-        lastY = e.clientY;
-      }
-    });
-    window.addEventListener('pointermove', (e) => {
-      if (!rotating) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      this.spherical.theta -= dx * 0.01;
-      this.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.spherical.phi - dy * 0.01));
-      this.updateCamera();
-    });
-    window.addEventListener('pointerup', () => {
-      rotating = false;
-    });
-    dom.addEventListener('contextmenu', (e) => e.preventDefault());
-    dom.addEventListener(
-      'wheel',
-      (e) => {
-        this.spherical.radius = Math.max(15, Math.min(300, this.spherical.radius + e.deltaY * 0.05));
-        this.updateCamera();
-        e.preventDefault();
-      },
-      { passive: false },
-    );
+    this.detach();
+    this.dom = dom;
+    dom.addEventListener('pointerdown', this.onDown);
+    window.addEventListener('pointermove', this.onMove);
+    window.addEventListener('pointerup', this.onUp);
+    dom.addEventListener('contextmenu', this.onCtx);
+    dom.addEventListener('wheel', this.onWheel, { passive: false });
+  }
+
+  detach(): void {
+    if (!this.dom) return;
+    this.dom.removeEventListener('pointerdown', this.onDown);
+    window.removeEventListener('pointermove', this.onMove);
+    window.removeEventListener('pointerup', this.onUp);
+    this.dom.removeEventListener('contextmenu', this.onCtx);
+    this.dom.removeEventListener('wheel', this.onWheel);
+    this.dom = null;
+    this.rotating = false;
   }
 
   /** Raycast from pointer; returns intersection with given meshes, or null. */

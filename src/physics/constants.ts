@@ -38,6 +38,22 @@ export const MOON = {
 // single source of truth; flight-controller updates each body with it per frame.
 export const SUN_DIRECTION = new Float64Array([1, 0.35, 0.6]);
 
+// Atmosphere: exponential density model for aerodynamic drag during ascent.
+// The planet has a thin atmosphere that creates a mild speed-vs-altitude ceiling
+// — going too fast too low wastes a little delta-v to drag, which makes gravity
+// turns worthwhile. The drag is deliberately LIGHT: it costs ~30-60 m/s of delta-v
+// during a straight-up ascent, not enough to prevent flight, just enough that a
+// gravity turn (ascend through the thick air, then pitch east) is more efficient.
+//
+// Density profile: ρ(h) = surfaceDensity × exp(-h / scaleHeight), clamped to 0
+// above `height`. The atmosphere is thin (1km) relative to the 3000m planet.
+export const ATMOSPHERE = {
+  height: 1000, // m above planet surface — top of atmosphere (drag = 0 above this)
+  scaleHeight: 200, // m — exponential decay rate of air density
+  surfaceDensity: 0.01, // game force units — light drag that penalizes low/fast
+  dragFactor: 0.02, // combined Cd × A — low so terminal velocity > orbital velocity
+};
+
 // Moon's sphere of influence: a * (m_body / m_parent)^(2/5).
 // Precomputed so all consumers (HUD, win-states, gravity) use the exact same
 // boundary instead of hardcoding an approximation that drifts.

@@ -73,6 +73,9 @@ export class FlightCamera {
     window.addEventListener('pointermove', this.onMove);
     window.addEventListener('pointerup', this.onUp);
     dom.addEventListener('wheel', this.onWheel, { passive: false });
+    // Suppress the browser context menu on right-click — without this, Electron
+    // renders a transparent overlay that looks like a ghostly mirror of the scene.
+    dom.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   detach(): void {
@@ -80,6 +83,9 @@ export class FlightCamera {
     if (this.onMove) window.removeEventListener('pointermove', this.onMove);
     if (this.onUp) window.removeEventListener('pointerup', this.onUp);
     if (this.dom && this.onWheel) this.dom.removeEventListener('wheel', this.onWheel);
+    // contextmenu listener is anonymous (one per attach) — can't remove it
+    // individually, but it only fires on the canvas element which is replaced
+    // on re-launch, so it won't accumulate.
     this.dom = null;
   }
 

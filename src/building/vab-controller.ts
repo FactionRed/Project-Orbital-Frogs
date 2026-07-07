@@ -62,12 +62,23 @@ export class VabController {
       const half = Math.abs(snap.normal.x * def.size[0]) + Math.abs(snap.normal.y * def.size[1]) + Math.abs(snap.normal.z * def.size[2]);
       this.ghost.position.copy(snap.point).addScaledVector(snap.normal, half);
       this.snapTargetUid = (snap.object.userData.uid as string) ?? null;
+      this.setGhostColor(true);
       return;
     }
     this.snapTargetUid = null;
     const pt = this.camera.pointerOnGround(ndc);
     if (pt) {
       this.ghost.position.set(pt.x, def.size[1], pt.z);
+      this.setGhostColor(false);
+    }
+  }
+
+  /** Tint the ghost green (snapping) or blue (free-floating) for visual feedback. */
+  private setGhostColor(snapping: boolean): void {
+    if (!this.ghost) return;
+    const mat = this.ghost.material as THREE.MeshStandardMaterial;
+    if (mat.emissive) {
+      mat.emissive.setHex(snapping ? 0x004400 : 0x001133);
     }
   }
 

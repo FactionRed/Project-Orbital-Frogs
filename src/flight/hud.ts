@@ -1,7 +1,7 @@
 // src/flight/hud.ts
 import type { FlightController } from './flight-controller';
 import { orbitalEnergy, apoapsisPeriapsis } from '../physics/orbit-math';
-import { MOON_SOI } from '../physics/constants';
+import { MOON_SOI, ATMOSPHERE } from '../physics/constants';
 
 export class Hud {
   private root: HTMLElement;
@@ -12,6 +12,7 @@ export class Hud {
   private throttleBar: HTMLElement;
   private soi: HTMLElement;
   private sasIndicator: HTMLElement;
+  private qBar: HTMLElement;
 
   constructor() {
     this.root = document.createElement('div');
@@ -23,6 +24,7 @@ export class Hud {
         <div class="row"><span class="label">VEL</span><span id="vel" class="val">0</span><span class="unit">m/s</span></div>
         <div class="row"><span class="label">Ap/Pe</span><span id="appe" class="val wide">-</span></div>
         <div class="row"><span class="label">FUEL</span><span id="fuel" class="val">0</span></div>
+        <div class="row"><span class="label">Q</span><span id="qbar" class="val">0</span><span class="unit">kPa</span></div>
         <div class="row"><span class="label">SOI</span><span id="soi" class="val wide">-</span></div>
         <div class="row"><span class="label">SAS</span><span id="sas" class="val wide" style="color:#777">OFF</span></div>
       </div>
@@ -35,6 +37,7 @@ export class Hud {
     this.throttleBar = this.root.querySelector('#throttle-fill')!;
     this.soi = this.root.querySelector('#soi')!;
     this.sasIndicator = this.root.querySelector('#sas')!;
+    this.qBar = this.root.querySelector('#qbar')!;
   }
 
   update(flight: FlightController): void {
@@ -65,6 +68,17 @@ export class Hud {
     this.apPe.textContent = apPeText;
     this.fuel.textContent = flight.ship.fuel.toFixed(0);
     this.throttleBar.style.width = `${flight.throttle * 100}%`;
+
+    // Dynamic pressure Q = ½ ρ v². Shows how much drag the ship is fighting.
+    // Turns red when Q is high (above 500) — the "don't go faster here" signal.
+    // Zero above the atmosphere (alt ≥ ATMOSPHERE.height).
+    let q = 0;
+    if (dom === flight.planet && alt >= 0 && alt < ATMOSPHERE.height) {
+      const density = ATMOSPHERE.surfaceDensity * Math.exp(-alt / ATMOSPHERE.scaleHeight);
+      q = 0.5 * density * vel * vel;
+    }
+    this.qBar.textContent = q.toFixed(0);
+    this.qBar.style.color = q > 50 ? '#f44' : '#fff';
     // SOI label: dominant body via SOI distance to moon center.
     const moonPos = flight.moon.position;
     const md = Math.hypot(

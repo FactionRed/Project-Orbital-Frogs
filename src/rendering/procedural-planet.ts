@@ -117,7 +117,20 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
     }
 
     const disp = (elevation - 0.5) * 2 * amplitude; // meters above/below base radius
-    pos.setXYZ(i, x + nx * disp, y + ny * disp, z + nz * disp);
+
+    // Launchpad: flatten terrain near the north pole (spawn point) so the ship
+    // sits on the surface visually AND on the collision sphere (base radius).
+    // Smoothly blend displacement → 0 within ~10° of the pole. Planets only —
+    // moons have no launchpad and keep full craggy terrain everywhere.
+    let finalDisp = disp;
+    if (kind === 'planet') {
+      const angleFromPole = Math.acos(ny); // 0 at north pole, π/2 at equator
+      const poleRadius = Math.PI / 18; // ~10°
+      const blend = Math.max(1 - angleFromPole / poleRadius, 0);
+      finalDisp = disp * (1 - blend);
+    }
+
+    pos.setXYZ(i, x + nx * finalDisp, y + ny * finalDisp, z + nz * finalDisp);
     elev[i] = elevation;
     if (elevation > maxElev) maxElev = elevation;
   }

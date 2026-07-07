@@ -10,6 +10,8 @@ export interface PartDef {
   dryMass: number; // tonnes
   fuel?: number; // units (tanks only)
   thrust?: number; // kN (engines only)
+  /** Short user-facing description of what this part does. */
+  desc: string;
   /** Half-extents of the part's bounding box, used for mesh + collision. */
   size: [number, number, number];
   color: number;

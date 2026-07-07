@@ -13,6 +13,9 @@ import { OrbitMap } from './ui/orbit-map';
 import { NavBall } from './ui/navball';
 import { HoldPanel } from './ui/hold-panel';
 import { WinStates } from './ui/win-states';
+import { FlightPrompts } from './ui/flight-prompts';
+import { StagingDisplay } from './ui/staging-display';
+import { installDebugInterface } from './dev/debug-interface';
 import type { ShipDesign } from './entities/ship';
 import { initAssets } from './assets';
 
@@ -75,12 +78,14 @@ let flightCam: FlightCamera | null = null;
 function launchFlight(design: ShipDesign) {
   if (flight) {
     scene.remove(flight.group);
+    scene.remove(flight.ship.group);
     scene.remove(flight.planet.mesh);
     if (flight.planet.atmosphere) scene.remove(flight.planet.atmosphere);
     scene.remove(flight.moon.mesh);
     if (flight.moon.atmosphere) scene.remove(flight.moon.atmosphere);
   }
   vab.group.visible = false;
+  vabCam.detach();
   ui.hide();
   flight = new FlightController(design, scene);
   controls = new FlightControls(input, flight);
@@ -91,12 +96,16 @@ function launchFlight(design: ShipDesign) {
   holdPanel.show();
   holdPanel.setActive('off');
   win.reset();
+  flightPrompts.reset();
+  stagingDisplay.build(flight);
+  stagingDisplay.show();
   fsm.transition('FLIGHT');
 }
 
 function revertToVab() {
   if (flight) {
     scene.remove(flight.group);
+    scene.remove(flight.ship.group);
     scene.remove(flight.planet.mesh);
     if (flight.planet.atmosphere) scene.remove(flight.planet.atmosphere);
     scene.remove(flight.moon.mesh);
@@ -111,6 +120,7 @@ function revertToVab() {
   // Restore the VAB camera: the flight camera repointed its up-vector, so we
   // must reset orientation or the builder view comes back sideways/upside-down.
   vabCam.reset();
+  vabCam.attach(renderer.domElement);
   vab.group.visible = true;
   ui.show();
   hud.hide();
@@ -118,6 +128,8 @@ function revertToVab() {
   holdPanel.hide();
   orbitMap.hide();
   win.hide();
+  flightPrompts.hide();
+  stagingDisplay.hide();
   fsm.transition('BUILD');
 }
 
@@ -125,6 +137,7 @@ const ui = new VabUi({
   onSelectPart: (id) => (id ? vab.beginPlace(id) : vab.cancelPlace()),
   onDeleteSelected: () => vab.deleteSelected(),
   onRotateSelected: (d) => vab.rotateSelected(d),
+  onClear: () => vab.clear(),
   onLaunch: () => {
     if (vab.isReady()) launchFlight(vab.design);
   },
@@ -134,6 +147,8 @@ const hud = new Hud();
 const orbitMap = new OrbitMap(scene, vabCam.camera);
 const navball = new NavBall();
 const holdPanel = new HoldPanel();
+const flightPrompts = new FlightPrompts();
+const stagingDisplay = new StagingDisplay();
 holdPanel.onSelect = (mode) => {
   if (flight) {
     flight.holdMode = mode;
@@ -181,8 +196,10 @@ const hints = document.createElement('div');
 hints.id = 'hints';
 hints.innerHTML = `
   <h3>VAB</h3>
-  <div>Click part → click to place · Right-drag rotate view · Wheel zoom</div>
-  <div>Q/E rotate · Del delete · Launch to fly</div>
+  <div>Click part → move mouse → click to place</div>
+  <div>Ghost green = snapping · blue = ground</div>
+  <div>Right-drag rotate view · Wheel zoom</div>
+  <div>Q/E rotate · Del delete · Clear All resets</div>
   <h3>FLIGHT</h3>
   <div>Shift/Ctrl throttle · Z full · X cut · Space stage</div>
   <div>W/S pitch · A/D yaw · Q/E roll · T stability assist</div>
@@ -191,9 +208,11 @@ hints.innerHTML = `
   <div style="margin-top:6px;color:#667">Press H to hide/show this help</div>
 `;
 document.body.appendChild(hints);
-hints.style.display = 'block';
+// Restore hint visibility from localStorage (persists the H toggle across reloads).
+hints.style.display = localStorage.getItem('hintsVisible') !== 'false' ? 'block' : 'none';
 input.onPressed('KeyH', () => {
   hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
+  localStorage.setItem('hintsVisible', hints.style.display === 'none' ? 'false' : 'true');
 });
 
 // Precision mode indicator (shown when CapsLock toggles precision controls on).
@@ -252,6 +271,8 @@ function animate() {
       navball.update(flight);
       holdPanel.setActive(flight.holdMode);
       win.update(flight);
+      flightPrompts.update(flight);
+      stagingDisplay.update(flight);
     }
     precisionIndicator.style.display = controls.precisionMode ? 'block' : 'none';
   }
@@ -277,4 +298,14 @@ assets.ready.then(() => {
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   vabCam.resize(window.innerWidth / window.innerHeight);
+});
+
+// --- Debug interface — agent-friendly API on window.__game ---
+installDebugInterface({
+  vab,
+  flight: () => flight,
+  flightCam: () => flightCam,
+  fsm,
+  orbitMap,
+  dom: () => renderer.domElement,
 });
