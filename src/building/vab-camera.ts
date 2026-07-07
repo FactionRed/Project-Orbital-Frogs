@@ -8,12 +8,12 @@ export class VabCamera {
   private raycaster = new THREE.Raycaster();
 
   constructor(aspect: number) {
-    // Far plane must comfortably exceed the moon's orbit radius (4000m) so the
+    // Far plane must comfortably exceed the moon's orbit radius (40000m) so the
     // moon is visible from the pad and during the map view's system pullback.
-    // Near plane 0.5 (not 0.1) keeps the depth-buffer ratio sane (400000:1) and
+    // Near plane 0.5 (not 0.1) keeps the depth-buffer ratio sane and
     // avoids z-fighting at distance, with no visible loss — nothing in the game
     // is ever viewed closer than ~6m.
-    this.camera = new THREE.PerspectiveCamera(50, aspect, 0.5, 200000);
+    this.camera = new THREE.PerspectiveCamera(50, aspect, 0.5, 2000000);
     this.updateCamera();
   }
 

@@ -77,11 +77,9 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
   const noise3D = createNoise3D(mulberry32(seed));
 
   // Terrain amplitude as a fraction of radius. Kept small (4%) so the
-  // collision sphere (at the base radius) stays a close match to the visual
-  // surface — displaced peaks are only ±12m on a 300m planet, so ships resting
-  // on the collision sphere don't visibly clip into mountains.
-  // (Earlier 0.18 was visually dramatic but caused 54m clipping; the comment
-  // in celestial-body.ts already documented "≤4%, so the offset is minor".)
+  // collision sphere (base radius) is a good approximation of the surface —
+  // displaced peaks are only ±120m on a 3000m planet, so ships resting
+  // on the surface don't visually clip into mountains.
   const amplitudeFrac = 0.04;
   const amplitude = radius * amplitudeFrac;
   // Higher-frequency base so peaks look jagged rather than bulbous.

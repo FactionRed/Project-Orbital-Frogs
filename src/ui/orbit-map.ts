@@ -26,9 +26,9 @@ export class OrbitMap {
   // Map camera state (separate from flight camera).
   private mapAzimuth = Math.PI / 4;
   private mapPitch = Math.PI / 6;
-  private mapDistance = 3000;
-  private readonly minDistance = 200;
-  private readonly maxDistance = 20000;
+  private mapDistance = 30000;
+  private readonly minDistance = 2000;
+  private readonly maxDistance = 200000;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
@@ -117,7 +117,7 @@ export class OrbitMap {
         // Snap initial distance to something sensible based on ship altitude.
         const shipPos = flight.ship.rootBody.position;
         const alt = Math.hypot(shipPos.x, shipPos.y, shipPos.z);
-        this.mapDistance = Math.max(800, Math.min(this.maxDistance, alt * 3));
+        this.mapDistance = Math.max(5000, Math.min(this.maxDistance, alt * 3));
       }
     } else {
       this.overlay.style.display = 'none';
