@@ -16,6 +16,8 @@ import { WinStates } from './ui/win-states';
 import { FlightPrompts } from './ui/flight-prompts';
 import { StagingDisplay } from './ui/staging-display';
 import { installDebugInterface } from './dev/debug-interface';
+import { MenuScene } from './ui/menu-scene';
+import { MainMenu } from './ui/main-menu';
 import type { ShipDesign } from './entities/ship';
 import { initAssets } from './assets';
 
@@ -60,9 +62,17 @@ const fsm = new StateMachine();
 const input = new Input();
 input.attach();
 
+// --- Main menu 3D scene + overlay ---
+const menuScene = new MenuScene(window.innerWidth / window.innerHeight);
+scene.add(menuScene.group);
+
+// Forward-declared — assigned after ui/hints are created below.
+let enterVab: () => void = () => {};
+
 const vabCam = new VabCamera(window.innerWidth / window.innerHeight);
 const vab = new VabController(scene, vabCam);
-vabCam.attach(renderer.domElement);
+// VAB camera starts detached — re-attached when entering VAB from the menu.
+vab.group.visible = false; // hidden during INIT (menu scene showing)
 
 // Build-space grid. Added to vab.group (NOT scene directly) so it hides along
 // with the rest of the VAB on launch — otherwise it sits at the world origin,
@@ -86,6 +96,7 @@ function launchFlight(design: ShipDesign) {
   }
   vab.group.visible = false;
   vabCam.detach();
+  menuScene.group.visible = false;
   ui.hide();
   flight = new FlightController(design, scene);
   controls = new FlightControls(input, flight);
@@ -215,6 +226,24 @@ input.onPressed('KeyH', () => {
   localStorage.setItem('hintsVisible', hints.style.display === 'none' ? 'false' : 'true');
 });
 
+// --- Main menu (created after all UI elements so it can hide/show them) ---
+const mainMenu = new MainMenu(() => enterVab());
+document.body.appendChild(mainMenu.element);
+
+enterVab = () => {
+  menuScene.group.visible = false;
+  vab.group.visible = true;
+  vabCam.attach(renderer.domElement);
+  mainMenu.hide();
+  ui.show();
+  hints.style.display = localStorage.getItem('hintsVisible') !== 'false' ? 'block' : 'none';
+  fsm.transition('BUILD');
+};
+
+// Hide all gameplay UI during INIT — only the menu scene + main menu show.
+ui.hide();
+hints.style.display = 'none';
+
 // Precision mode indicator (shown when CapsLock toggles precision controls on).
 const precisionIndicator = document.createElement('div');
 precisionIndicator.id = 'precision-indicator';
@@ -245,7 +274,8 @@ function animate() {
   //    with a fixed, small timestep — variable dt causes energy drift)
   //  - No huge jumps when tab is backgrounded (accumulator caps naturally)
   const now = performance.now();
-  physicsAccumulator += Math.min((now - lastFrameTime) / 1000, 0.1);
+  const frameDt = Math.min((now - lastFrameTime) / 1000, 0.1);
+  physicsAccumulator += frameDt;
   lastFrameTime = now;
 
   if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
@@ -276,7 +306,14 @@ function animate() {
     }
     precisionIndicator.style.display = controls.precisionMode ? 'block' : 'none';
   }
-  renderer.render(scene, vabCam.camera);
+  // Menu scene: render before VAB is entered. Slowly orbits the camera
+  // around the crashed rocket debris on the moon surface.
+  if (fsm.current === 'INIT') {
+    menuScene.update(frameDt);
+    renderer.render(scene, menuScene.cameraObject);
+  } else {
+    renderer.render(scene, vabCam.camera);
+  }
   input.endFrame();
 }
 
@@ -287,17 +324,22 @@ assets.ready.then(() => {
   // Force the bar to 100% in case onLoad fired before the overlay connected.
   barFill.style.width = '100%';
   pctEl.textContent = '100%';
-  animate();
-  // Fade the overlay out after a tick so the 100% state is visible briefly.
+  animate(); // start render loop — renders the 3D menu scene during INIT
+  // Fade the loader overlay out quickly to reveal the 3D menu scene + main menu.
   requestAnimationFrame(() => {
-    loaderEl.classList.add('fading');
-    setTimeout(() => loaderEl.remove(), 700); // match CSS transition
+    setTimeout(() => {
+      loaderEl.classList.add('fading');
+      setTimeout(() => loaderEl.remove(), 600); // match CSS transition
+      // Show the main menu overlay — the player clicks "Enter VAB" to proceed.
+      mainMenu.show();
+    }, 300); // brief pause at 100% before fading
   });
 });
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   vabCam.resize(window.innerWidth / window.innerHeight);
+  menuScene.resize(window.innerWidth / window.innerHeight);
 });
 
 // --- Debug interface — agent-friendly API on window.__game ---

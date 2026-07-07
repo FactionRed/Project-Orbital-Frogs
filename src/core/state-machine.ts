@@ -1,10 +1,10 @@
 // src/core/state-machine.ts
-export type GameState = 'BUILD' | 'FLIGHT' | 'MAP';
+export type GameState = 'INIT' | 'BUILD' | 'FLIGHT' | 'MAP';
 
 export type StateListener = (from: GameState, to: GameState) => void;
 
 export class StateMachine {
-  private state: GameState = 'BUILD';
+  private state: GameState = 'INIT';
   private listeners: StateListener[] = [];
 
   get current(): GameState {

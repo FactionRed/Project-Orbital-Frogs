@@ -52,7 +52,46 @@ canvas { display: block; }
 #hints h3 { font-size: 12px; color: #cdd; margin-top: 6px; }
 #hints h3:first-child { margin-top: 0; }
 
-/* Flight prompt — shown after launch until first stage fires. */
+/* Main menu overlay — shown during INIT over the 3D crash scene. */
+#main-menu {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: 'Segoe UI', system-ui, sans-serif; pointer-events: none;
+}
+#main-menu .menu-content {
+  text-align: center; pointer-events: auto;
+  background: rgba(5,10,20,0.55); backdrop-filter: blur(6px);
+  padding: 48px 64px; border-radius: 16px; border: 1px solid rgba(60,100,160,0.3);
+}
+#main-menu .menu-title {
+  font-size: 42px; font-weight: 300; letter-spacing: 6px; margin: 0 0 8px 0;
+  background: linear-gradient(180deg, #cfe0ff, #5a7bbf);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 2px 24px rgba(0,0,0,0.8);
+}
+#main-menu .menu-subtitle {
+  font-size: 13px; color: #7a8aab; letter-spacing: 3px; text-transform: uppercase;
+  margin: 0 0 32px 0; text-shadow: 0 1px 8px rgba(0,0,0,0.9);
+}
+#main-menu .menu-btn {
+  display: block; width: 240px; margin: 8px auto; padding: 12px 24px;
+  font-size: 15px; font-family: inherit; letter-spacing: 1px;
+  border-radius: 8px; cursor: pointer; transition: all 0.15s ease;
+}
+#main-menu .menu-btn--primary {
+  background: linear-gradient(135deg, #1a3a5a, #2a5a8a); color: #fff;
+  border: 1px solid #3a6aaa; box-shadow: 0 2px 12px rgba(40,90,170,0.3);
+}
+#main-menu .menu-btn--primary:hover {
+  background: linear-gradient(135deg, #2a5a8a, #3a7aba); box-shadow: 0 4px 20px rgba(50,110,200,0.4);
+}
+#main-menu .menu-btn--ghost {
+  background: transparent; color: #6a7a95; border: 1px solid #2a3550;
+}
+#main-menu .menu-btn--ghost:hover { color: #aab; border-color: #4a5a7a; }
+#main-menu .menu-version {
+  font-size: 10px; color: #4a5a70; margin: 24px 0 0 0; font-family: monospace;
+}
 #flight-prompt {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   background: rgba(0,15,30,0.85); color: #cde; font-family: sans-serif;

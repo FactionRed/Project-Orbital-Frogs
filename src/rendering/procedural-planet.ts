@@ -319,7 +319,7 @@ export function buildProceduralBody(opts: ProceduralBodyOptions): BuiltProcedura
 
   let atmosphere: THREE.Mesh | null = null;
   if (opts.kind === 'planet') {
-    const atmoGeom = new THREE.SphereGeometry(opts.radius * 1.05, 64, 48);
+    const atmoGeom = new THREE.SphereGeometry(opts.radius * 2.0, 64, 48);
     const atmoMat = buildAtmosphereMaterial(opts, 0x66aaff);
     debugGLSL(`${opts.kind} atmosphere`, atmoMat);
     atmosphere = new THREE.Mesh(atmoGeom, atmoMat);

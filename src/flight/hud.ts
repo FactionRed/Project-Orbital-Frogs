@@ -78,7 +78,7 @@ export class Hud {
       q = 0.5 * density * vel * vel;
     }
     this.qBar.textContent = q.toFixed(0);
-    this.qBar.style.color = q > 50 ? '#f44' : '#fff';
+    this.qBar.style.color = q > 200 ? '#f44' : '#fff';
     // SOI label: dominant body via SOI distance to moon center.
     const moonPos = flight.moon.position;
     const md = Math.hypot(
