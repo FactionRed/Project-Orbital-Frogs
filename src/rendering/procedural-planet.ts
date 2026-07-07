@@ -77,11 +77,9 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
   const noise3D = createNoise3D(mulberry32(seed));
 
   // Terrain amplitude as a fraction of radius. Kept small (4%) so the
-  // collision sphere (at the base radius) stays a close match to the visual
-  // surface — displaced peaks are only ±12m on a 300m planet, so ships resting
-  // on the collision sphere don't visibly clip into mountains.
-  // (Earlier 0.18 was visually dramatic but caused 54m clipping; the comment
-  // in celestial-body.ts already documented "≤4%, so the offset is minor".)
+  // collision sphere (base radius) is a good approximation of the surface —
+  // displaced peaks are only ±120m on a 3000m planet, so ships resting
+  // on the surface don't visually clip into mountains.
   const amplitudeFrac = 0.04;
   const amplitude = radius * amplitudeFrac;
   // Higher-frequency base so peaks look jagged rather than bulbous.
@@ -119,7 +117,20 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
     }
 
     const disp = (elevation - 0.5) * 2 * amplitude; // meters above/below base radius
-    pos.setXYZ(i, x + nx * disp, y + ny * disp, z + nz * disp);
+
+    // Launchpad: flatten terrain near the north pole (spawn point) so the ship
+    // sits on the surface visually AND on the collision sphere (base radius).
+    // Smoothly blend displacement → 0 within ~10° of the pole. Planets only —
+    // moons have no launchpad and keep full craggy terrain everywhere.
+    let finalDisp = disp;
+    if (kind === 'planet') {
+      const angleFromPole = Math.acos(ny); // 0 at north pole, π/2 at equator
+      const poleRadius = Math.PI / 18; // ~10°
+      const blend = Math.max(1 - angleFromPole / poleRadius, 0);
+      finalDisp = disp * (1 - blend);
+    }
+
+    pos.setXYZ(i, x + nx * finalDisp, y + ny * finalDisp, z + nz * finalDisp);
     elev[i] = elevation;
     if (elevation > maxElev) maxElev = elevation;
   }

@@ -99,7 +99,7 @@ export class WinStates {
         ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
         : 0;
       const vertSpeed = Math.abs(radialVel);
-      if (moonAlt < 5 && vertSpeed < 3) {
+      if (moonAlt < 50 && vertSpeed < 30) {
         this.achieved.add('moon-landed');
         this.show('🌕 Lunar Landing!');
         this.onEvent('moon-landed');
@@ -117,10 +117,10 @@ export class WinStates {
       ? (root.velocity.x * moonDx2 + root.velocity.y * moonDy2 + root.velocity.z * moonDz2) / moonDist
       : 0;
     const moonCrashed = inMoonSoi && (
-      moonDist < flight.moon.data.radius - 1 ||
-      (moonAltitude < 5 && Math.abs(moonRadialVel) >= 3)
+      moonDist < flight.moon.data.radius - 10 ||
+      (moonAltitude < 50 && Math.abs(moonRadialVel) >= 30)
     );
-    if (planetAlt < -1 || moonCrashed) {
+    if (planetAlt < -10 || moonCrashed) {
       if (!this.achieved.has('crash')) {
         this.achieved.add('crash');
         this.show('💥 Crashed — Revert with F1');
@@ -130,7 +130,7 @@ export class WinStates {
 
     // Safe return: terminal — was on moon, now back near planet surface, slow touchdown.
     if (this.wasInMoonSoi && !inMoonSoi && !this.achieved.has('safe-return')) {
-      if (planetAlt < 10 && Math.hypot(v[0], v[1], v[2]) < 15) {
+      if (planetAlt < 100 && Math.hypot(v[0], v[1], v[2]) < 50) {
         this.achieved.add('safe-return');
         this.show('🏆 Mission Complete! Safe Return.', true);
         this.onEvent('safe-return');

@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { gravityForce } from '../src/physics/gravity';
 import { G, PLANET } from '../src/physics/constants';
 
-const MU = G * PLANET.mass; // 1 * 900,000 = 900,000
+const MU = G * PLANET.mass; // 1 * 90,000,000 = 90,000,000
 
 describe('gravityForce', () => {
   it('points toward the body and scales as 1/r^2', () => {
-    // body at origin, ship at (1000,0,0), mass 1t
+    // body at origin, ship at (10000,0,0), mass 1t
     const bodyPos: [number, number, number] = [0, 0, 0];
-    const shipPos: [number, number, number] = [1000, 0, 0];
+    const shipPos: [number, number, number] = [10000, 0, 0];
     const f = gravityForce(bodyPos, MU, shipPos, 1);
-    // F = mu * m / r^2 = 900,000 * 1 / 1,000,000 = 0.9
+    // F = mu * m / r^2 = 90,000,000 * 1 / 100,000,000 = 0.9
     expect(f[0]).toBeCloseTo(-0.9, 6); // pointing -x (toward origin)
     expect(f[1]).toBeCloseTo(0, 6);
     expect(f[2]).toBeCloseTo(0, 6);
@@ -18,7 +18,7 @@ describe('gravityForce', () => {
 
   it('doubles when mass doubles', () => {
     const bodyPos: [number, number, number] = [0, 0, 0];
-    const shipPos: [number, number, number] = [1000, 0, 0];
+    const shipPos: [number, number, number] = [10000, 0, 0];
     const f1 = gravityForce(bodyPos, MU, shipPos, 1);
     const f2 = gravityForce(bodyPos, MU, shipPos, 2);
     expect(f2[0]).toBeCloseTo(2 * f1[0], 6);
@@ -29,7 +29,7 @@ describe('gravityForce', () => {
     const bodyPos: [number, number, number] = [0, 0, 0];
     const shipPos: [number, number, number] = [PLANET.radius, 0, 0];
     const f = gravityForce(bodyPos, MU, shipPos, 1);
-    // F = mu * m / r^2 = 900,000 / 90,000 = 10
+    // F = mu * m / r^2 = 90,000,000 / 9,000,000 = 10
     expect(f[0]).toBeCloseTo(-10, 1);
   });
 });

@@ -8,11 +8,18 @@ import { CelestialBody } from '../physics/celestial-body';
 import { sphereOfInfluence } from '../physics/orbit-math';
 import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
-import { PLANET, MOON, SUN_DIRECTION } from '../physics/constants';
+import { PLANET, MOON, SUN_DIRECTION, ATMOSPHERE } from '../physics/constants';
+import { FUEL_DENSITY } from '../entities/parts-catalog';
 
-// Tuned so one tank (400 fuel) at full throttle (one 40kN engine) burns for
-// ~30s: burn = 40 * 1 * dt * 0.33 ≈ 13.3 fuel/s → 400 / 13.3 ≈ 30s of thrust.
-const FUEL_BURN_RATE = 0.33;
+// Tuned so one tank (1200 fuel) at full throttle (one 700kN engine) burns for
+// ~3.4s: burn = 700 * 1 * dt * 0.5 ≈ 350 fuel/s → 1200 / 350 ≈ 3.4s of thrust.
+// Effective exhaust velocity = 1 / (0.5 × 0.02) = 100 m/s.
+// Single-stage delta-v (pod+tank+engine, 26t wet / 2t dry) = 100 × ln(12.4) ≈ 252 m/s.
+// Surface orbital velocity is ~173 m/s (ratio ~1.46×); escape velocity is ~245 m/s.
+// So a single stage can orbit (with a gravity turn) but cannot escape — straight
+// up peaks at ~2500m and falls back. Atmospheric drag in the lower 1km costs
+// ~30-60 m/s, so a poor ascent fails. A 2-stage rocket has margin for moon transfer.
+const FUEL_BURN_RATE = 0.5;
 
 export type HoldMode = 'off' | 'prograde' | 'retrograde' | 'normal' | 'antinormal' | 'radialin' | 'radialout';
 
@@ -32,9 +39,16 @@ export class FlightController {
   /** Sun direction (body → sun), shared by both celestial bodies' shaders. */
   private sunDir = new THREE.Vector3();
   private gravity: GravitySystem;
-  private stageActive = true;
+  /** Whether the current stage's engine is active (can produce thrust).
+   *  Starts false — user must press Space to activate the first stage. */
+  private stageActive = false;
   private stages: Stage[] = [];
-  private currentStageIndex = 0;
+  /** Index of the current (next-to-fire) stage. Public for UI. */
+  currentStageIndex = 0;
+  /** Whether the current stage has been activated (first Space press).
+   *  First press = activate (engine fires via throttle, no jettison).
+   *  Second press = jettison spent stage + advance to next. */
+  private stageActivated = false;
 
   constructor(
     design: ShipDesign,
@@ -126,6 +140,11 @@ export class FlightController {
   dominantBodyFor(pos: { x: number; y: number; z: number }): CelestialBody {
     const shipPos: [number, number, number] = [pos.x, pos.y, pos.z];
     return dominantBody(shipPos, this.candidates());
+  }
+
+  /** Stage list for UI rendering (read-only). */
+  getStages(): readonly Stage[] {
+    return this.stages;
   }
 
   /**
@@ -234,18 +253,31 @@ export class FlightController {
   }
 
   /**
-   * Decouple the current (lowest) stage: split the compound body at the decoupler.
-   * Pulls the staged parts' shapes off the flying body, creates a new body for
-   * them with proportionate mass, and gives the new body a small separation
-   * impulse so it visibly drops away.
+   * Two-phase staging:
+   *  - First Space press on a fresh stage: activate it (engine ready to fire
+   *    via throttle). No jettison — the engine stays attached and burns fuel.
+   *  - Second Space press: jettison the current stage's engine+tank+decoupler
+   *    and advance to the next stage (which then needs its own activate press).
+   *
+   * This prevents the "launch drops the engine" bug where the first Space press
+   * to ignite would immediately jettison the engine instead of firing it.
    */
   stage(): void {
+    // If the current stage hasn't been activated yet, activate it (first press).
+    if (!this.stageActivated) {
+      this.stageActivated = true;
+      this.stageActive = true;
+      return;
+    }
+
+    // Second press: jettison the current stage's parts and advance.
     const st = this.stages[this.currentStageIndex];
     if (!st) return;
     const toRemove = new Set<string>([...st.engineUids, ...st.tankUids]);
     if (st.decouplerUid) toRemove.add(st.decouplerUid);
     if (toRemove.size === 0) {
       this.currentStageIndex++;
+      this.stageActivated = false; // next stage starts inactive
       return;
     }
 
@@ -329,6 +361,9 @@ export class FlightController {
     });
 
     this.currentStageIndex++;
+    // Next stage starts inactive — user must press Space again to activate it.
+    this.stageActivated = false;
+    this.stageActive = false;
   }
 
   private uidForShapeIndex(sb: ShipBody, shapeIndex: number): string | undefined {
@@ -384,13 +419,45 @@ export class FlightController {
         const fuelBurn = totalThrust * this.throttle * dt * FUEL_BURN_RATE;
         this.ship.fuel = Math.max(0, this.ship.fuel - fuelBurn);
 
+        // Reduce body mass as fuel is burned (fuel has mass via FUEL_DENSITY).
+        // updateMassProperties() recalculates inertia tensor from new mass.
+        const root = this.ship.rootBody;
+        const massLoss = fuelBurn * FUEL_DENSITY;
+        if (massLoss > 0 && root.mass > massLoss) {
+          root.mass -= massLoss;
+          root.updateMassProperties();
+        }
+
         // Apply force along the root body's local +Y (engines push "up").
-        // Sum onto the root body so a single rigid body accelerates as one.
         const f = totalThrust * this.throttle;
         const localForce = new CANNON.Vec3(0, f, 0);
-        const worldForce = this.ship.rootBody.quaternion.vmult(localForce);
-        this.ship.rootBody.applyForce(worldForce, new CANNON.Vec3(0, 0, 0));
+        const worldForce = root.quaternion.vmult(localForce);
+        root.applyForce(worldForce, new CANNON.Vec3(0, 0, 0));
       }
+    }
+
+    // Atmospheric drag: exponential density model, quadratic in velocity.
+    // Makes the lower atmosphere a speed ceiling — going too fast too low burns
+    // delta-v to drag, so the player must do a gravity turn (ascend gently,
+    // then pitch over and accelerate) rather than blasting straight up.
+    for (const sb of this.ship.shipBodies) {
+      if (sb.body.type !== CANNON.Body.DYNAMIC) continue;
+      const rx = sb.body.position.x - this.planet.position.x;
+      const ry = sb.body.position.y - this.planet.position.y;
+      const rz = sb.body.position.z - this.planet.position.z;
+      const alt = Math.hypot(rx, ry, rz) - this.planet.data.radius;
+      if (alt < 0 || alt >= ATMOSPHERE.height) continue;
+      const density = ATMOSPHERE.surfaceDensity * Math.exp(-alt / ATMOSPHERE.scaleHeight);
+      const v = sb.body.velocity;
+      const speed = Math.hypot(v.x, v.y, v.z);
+      if (speed < 0.1) continue;
+      const dragMag = ATMOSPHERE.dragFactor * density * speed * speed;
+      const dragForce = new CANNON.Vec3(
+        -dragMag * v.x / speed,
+        -dragMag * v.y / speed,
+        -dragMag * v.z / speed,
+      );
+      sb.body.applyForce(dragForce, new CANNON.Vec3(0, 0, 0));
     }
 
     this.gravity.applyGravity();
