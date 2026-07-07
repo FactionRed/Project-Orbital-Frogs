@@ -122,12 +122,36 @@ function buildTerrainGeometry(radius: number, seed: number, kind: BodyKind): {
     // sits on the surface visually AND on the collision sphere (base radius).
     // Smoothly blend displacement → 0 within ~10° of the pole. Planets only —
     // moons have no launchpad and keep full craggy terrain everywhere.
+    //
+    // Also flatten around several "landing zone" points on the equator so the
+    // player has flat areas to touch down on after flight (not just the pole).
+    const landingZones: { nx: number; ny: number; nz: number; radius: number }[] = [];
+    if (kind === 'planet') {
+      // 3 flat zones spread around the equator.
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        landingZones.push({
+          nx: Math.cos(a), ny: 0, nz: Math.sin(a),
+          radius: Math.PI / 14, // ~13° flat zone
+        });
+      }
+    }
+
     let finalDisp = disp;
     if (kind === 'planet') {
+      // North pole launchpad.
       const angleFromPole = Math.acos(ny); // 0 at north pole, π/2 at equator
       const poleRadius = Math.PI / 18; // ~10°
       const blend = Math.max(1 - angleFromPole / poleRadius, 0);
       finalDisp = disp * (1 - blend);
+
+      // Equatorial landing zones.
+      for (const lz of landingZones) {
+        const dot = nx * lz.nx + ny * lz.ny + nz * lz.nz;
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+        const lzBlend = Math.max(1 - angle / lz.radius, 0);
+        finalDisp = finalDisp * (1 - lzBlend);
+      }
     }
 
     pos.setXYZ(i, x + nx * finalDisp, y + ny * finalDisp, z + nz * finalDisp);
@@ -293,6 +317,12 @@ export interface BuiltProceduralBody {
   atmosphere: THREE.Mesh | null;
   /** Update the sun-direction uniforms each frame. */
   setSunDirection: (dir: THREE.Vector3) => void;
+  /**
+   * The displaced terrain geometry — exported so physics can build a Trimesh
+   * collider that matches the visible terrain exactly (no clipping through
+   * mountains).
+   */
+  terrainGeometry: THREE.BufferGeometry;
 }
 
 /**
@@ -334,5 +364,5 @@ export function buildProceduralBody(opts: ProceduralBodyOptions): BuiltProcedura
     }
   };
 
-  return { surface, atmosphere, setSunDirection };
+  return { surface, atmosphere, setSunDirection, terrainGeometry: geometry };
 }

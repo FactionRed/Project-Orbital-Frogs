@@ -54,14 +54,22 @@ export class CelestialBody {
     this.mesh.position.copy(this.position);
     if (this.atmosphere) this.atmosphere.position.copy(this.position);
 
-    // Cannon static body (so ships collide with the surface). Lives in the
-    // CELESTIAL collision group so ship parts (group SHIP) can hit it.
-    // NOTE: collision uses a plain sphere at the base radius — displaced terrain
-    // peaks are visual only (amplitude is ≤4% of radius, so the offset is minor).
-    const shape = new CANNON.Sphere(data.radius);
+    // Cannon static body — Trimesh collider built from the displaced terrain
+    // geometry, so collision matches the visible surface exactly. Ships land
+    // on mountains and valleys instead of clipping through to a plain sphere.
+    const geom = built.terrainGeometry;
+    const posAttr = geom.attributes.position as THREE.BufferAttribute;
+    const vertices: number[] = [];
+    for (let i = 0; i < posAttr.count; i++) {
+      vertices.push(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+    }
+    const indices: number[] = geom.index
+      ? Array.from(geom.index.array)
+      : Array.from({ length: posAttr.count }, (_, i) => i);
+    const trimesh = new CANNON.Trimesh(vertices, indices);
     this.cannonBody = new CANNON.Body({
       mass: 0, // static
-      shape,
+      shape: trimesh,
       collisionFilterGroup: COLLISION_GROUP.CELESTIAL,
       collisionFilterMask: CELESTIAL_COLLISION_MASK,
     });
