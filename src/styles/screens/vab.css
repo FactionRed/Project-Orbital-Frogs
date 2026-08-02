@@ -1,1 +1,70 @@
-/* src/styles/screens/vab.css — filled in Step 5. */
+/* src/styles/screens/vab.css
+ * #vab-ui repeats the legacy id so these rules win on source order until
+ * Step 9 deletes styles.css. */
+#vab-ui {
+  position: fixed; top: var(--sp-3); left: var(--sp-3); z-index: 20;
+  width: clamp(220px, 20vw, 290px);
+  height: auto;
+  max-height: calc(100vh - 2 * var(--sp-3));
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  /* Reset the legacy slab; each Panel carries its own chrome now. */
+  background: none; padding: 0;
+  color: var(--ink); font-family: var(--font-body);
+}
+/* The legacy `#vab-ui .panel` slab styling would fight the component. */
+#vab-ui .panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  padding: var(--sp-3);
+}
+
+.part-list { display: flex; flex-direction: column; gap: var(--sp-1); }
+.part-key {
+  min-width: 0;
+  align-items: flex-start;
+  text-align: left;
+  padding: var(--sp-1) var(--sp-2);
+}
+.part-key .dsky-key__word { font-size: var(--fs-body); }
+.part-key .dsky-key__hint { font-size: 10px; color: var(--ink-dim); }
+
+.telemetry-stub .telemetry-pending {
+  font-family: var(--font-body); font-size: var(--fs-label);
+  color: var(--ink-faint); letter-spacing: var(--tracking-mono);
+  padding: var(--sp-1) 0; text-align: center; line-height: 1.4;
+}
+
+.actions-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.actions-row .dsky-key { flex: 1; min-width: 4.5rem; padding: var(--sp-1) var(--sp-2); }
+.actions-row .dsky-key__word { font-size: var(--fs-label); }
+.actions-row .dsky-key__hint { font-size: 10px; }
+
+/* The hover target wraps LAUNCH because a disabled button emits no pointer
+   events — without the wrapper the "why is this off?" tooltip never fires. */
+.launch-hover { display: flex; flex: 1 0 100%; }
+.launch-hover .dsky-key { flex: 1; }
+#launch.dsky-key {
+  border-color: var(--green);
+  background: transparent;
+  color: var(--ink);
+  font-weight: normal;
+}
+#launch.dsky-key:hover:not(:disabled) { background: var(--green); color: var(--phosphor-bg); }
+#launch.dsky-key:hover:not(:disabled) .dsky-key__hint { color: var(--phosphor-bg); }
+#launch.dsky-key:disabled { opacity: 0.4; border-color: var(--ink-faint); }
+
+.readiness-status {
+  font-family: var(--font-body); font-size: var(--fs-label);
+  letter-spacing: var(--tracking-mono);
+  padding: var(--sp-1) 0;
+  margin-bottom: var(--sp-2);
+  line-height: 1.4;
+}
+.readiness-status[data-state='nominal'] { color: var(--green); }
+.readiness-status[data-state='caution'] { color: var(--warn); }
+
+@media (max-width: 900px) {
+  #vab-ui { width: 210px; gap: var(--sp-3); }
+}

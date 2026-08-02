@@ -170,6 +170,9 @@ const ui = new VabUi({
     if (vab.isReady()) launchFlight(vab.design);
   },
 });
+// Point the UI at the live design straight away, so the readiness line reads
+// correctly on the very first frame instead of starting blank.
+ui.setDesign(vab.design);
 
 const hud = new Hud();
 const orbitMap = new OrbitMap(scene, vabCam.camera);
@@ -213,7 +216,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   );
   if (vab.isPlacing()) vab.onPointerUp(ndc);
   else vab.selectAt(ndc);
-  ui.onReadyChange(vab.isReady());
+  ui.setDesign(vab.design);
 });
 
 fsm.onTransition((from, to) => {
@@ -299,7 +302,7 @@ function animate() {
   physicsAccumulator += frameDt;
   lastFrameTime = now;
 
-  if (fsm.current === 'BUILD') ui.onReadyChange(vab.isReady());
+  if (fsm.current === 'BUILD') ui.setDesign(vab.design);
   if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {
     // Step physics in fixed increments — may run 0, 1, or 2+ steps per frame.
     let physicsStepped = false;

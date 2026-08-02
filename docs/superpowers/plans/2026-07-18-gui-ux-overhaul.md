@@ -100,6 +100,27 @@ Recorded as each step lands, so the plan stays an accurate record.
   threshold are exactly where a silent regression hides. Layout has no test. A live check at
   1280x800 and 900x640 confirms that no two panels overlap.
 
+**Step 5**
+
+- *Path:* the file is `src/building/vab-ui.ts`, not `src/ui/vab-ui.ts`.
+- *VabUi API:* the class keeps `constructor(cbs: VabUiCallbacks)` with the existing five
+  callbacks. Step 5.2.2 changes it to `constructor(design)` plus public fields, which does not
+  match `main.ts`. The class gains `setDesign(design)`. `main.ts` now calls that in place of
+  `ui.onReadyChange(vab.isReady())`, because a boolean cannot say what is missing.
+  `main.ts` also calls `setDesign` once at startup, so the status line is never blank.
+- *Blocker text:* `launchBlockerText()` lives in `ship.ts` next to `launchReadiness()`, with
+  its own tests. The UI then holds no wording logic.
+- *Tooltip host:* a `.launch-hover` wrapper carries the tooltip listeners. A disabled button
+  emits no pointer events. A tooltip on the button itself therefore never opens in the one
+  state that needs an explanation.
+- *Per-frame cost:* `main.ts` calls `setDesign` every BUILD frame. `renderReadiness` compares
+  the new status string against the last one and returns early if they agree.
+- *Live check:* empty gives `NEEDS COMMAND POD + ENGINE`, pod alone gives `NEEDS ENGINE`, and
+  pod plus engine gives `● READY` with the key enabled. The tooltip agrees at each step.
+- *Note for later checks:* CSS transitions stay frozen while the browser pane does not
+  composite. A colour read straight after a state change gives the previous value. Set
+  `transition: none` before the read.
+
 ---
 
 ## File Structure
@@ -1880,7 +1901,7 @@ Spec §5.3"
 
 ### Task 5.1: Add `launchReadiness` to ship.ts (TDD)
 
-- [ ] **Step 5.1.1: Write the failing test `test/vab-readiness.test.ts`**
+- [x] **Step 5.1.1: Write the failing test `test/vab-readiness.test.ts`**
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -1932,12 +1953,12 @@ describe('launchReadiness', () => {
 });
 ```
 
-- [ ] **Step 5.1.2: Run the test to verify it fails**
+- [x] **Step 5.1.2: Run the test to verify it fails**
 
 Run: `npx vitest run test/vab-readiness.test.ts`
 Expected: FAIL — `launchReadiness` not exported from `ship.ts`.
 
-- [ ] **Step 5.1.3: Implement `launchReadiness` in `src/entities/ship.ts`**
+- [x] **Step 5.1.3: Implement `launchReadiness` in `src/entities/ship.ts`**
 
 Add to `src/entities/ship.ts` (just below the existing `canLaunch`):
 
@@ -1956,18 +1977,18 @@ export function launchReadiness(d: ShipDesign): LaunchReadiness {
 
 Leave the existing `canLaunch(d)` in place (callers depend on it). It can now delegate: `export function canLaunch(d: ShipDesign): boolean { return launchReadiness(d).ok; }` — refactor optional, keep behavior identical.
 
-- [ ] **Step 5.1.4: Run the test to verify it passes**
+- [x] **Step 5.1.4: Run the test to verify it passes**
 
 Run: `npx vitest run test/vab-readiness.test.ts`
 Expected: 5 PASS.
 
 ### Task 5.2: Restyle vab-ui.ts
 
-- [ ] **Step 5.2.1: Read current `src/ui/vab-ui.ts` to map its API**
+- [x] **Step 5.2.1: Read current `src/ui/vab-ui.ts` to map its API**
 
 Run: `cat src/ui/vab-ui.ts` (or Read). Note: the constructor builds the left palette and the actions row (rotate/delete/clear/launch buttons). The `onReadyChange(isReady)` callback toggles Launch disabled. The `onSelectPart(id)` and `onLaunch()` callbacks are wired from `main.ts`.
 
-- [ ] **Step 5.2.2: Rewrite `src/ui/vab-ui.ts` to use Panel + DskyKey + Tooltip + a status line**
+- [x] **Step 5.2.2: Rewrite `src/ui/vab-ui.ts` to use Panel + DskyKey + Tooltip + a status line**
 
 ```ts
 // src/ui/vab-ui.ts
@@ -2085,13 +2106,13 @@ export class VabUi {
 
 **Executor note:** the current `vab-ui.ts` is referenced as `VabUi` in `main.ts` around L147-155. The constructor signature must match — if it currently takes `(vessel, db, symmetry)`, preserve those params or refactor `main.ts` to pass `design`. Read `main.ts` at execution time and align. The key behavior to preserve: `onSelectPart`, `onLaunch`, `onReadyChange` callbacks all still fire.
 
-- [ ] **Step 5.2.3: Update `main.ts` to call `vabUi.refreshReadiness()` after each placement**
+- [x] **Step 5.2.3: Update `main.ts` to call `vabUi.refreshReadiness()` after each placement**
 
 In `main.ts`'s VAB pointer-up handler (around L190-200, where placement succeeds), call `vabUi.setDesign(vab.design)` (or `vabUi.refreshReadiness()` if you preserved the design ref) so the status line updates live as parts are added.
 
 ### Task 5.3: vab.css
 
-- [ ] **Step 5.3.1: Fill `src/styles/screens/vab.css`**
+- [x] **Step 5.3.1: Fill `src/styles/screens/vab.css`**
 
 ```css
 /* src/styles/screens/vab.css */
@@ -2134,7 +2155,7 @@ In `main.ts`'s VAB pointer-up handler (around L190-200, where placement succeeds
 
 ### Task 5.4: Verify + commit
 
-- [ ] **Step 5.4.1: Verify live**
+- [x] **Step 5.4.1: Verify live**
 
 Boot, enter VAB. Confirm:
 - Empty VAB: Launch disabled, hover shows tooltip `NEEDS COMMAND POD + COMMAND ENGINE`, status line `○ NOT READY — NEEDS POD + ENGINE` in warn color.
@@ -2143,14 +2164,14 @@ Boot, enter VAB. Confirm:
 - Parts catalog styled as DSKY keys with stats hint line.
 - TELEMETRY stub panel visible with pending message.
 
-- [ ] **Step 5.4.2: Run tests + typecheck**
+- [x] **Step 5.4.2: Run tests + typecheck**
 
 ```bash
 npx tsc --noEmit && npx vitest run
 ```
 Expected: green.
 
-- [ ] **Step 5.4.3: Commit**
+- [x] **Step 5.4.3: Commit**
 
 ```bash
 git add src/entities/ship.ts src/ui/vab-ui.ts src/styles/screens/vab.css test/vab-readiness.test.ts src/main.ts
