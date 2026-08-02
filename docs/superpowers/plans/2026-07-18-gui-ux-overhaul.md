@@ -183,6 +183,31 @@ Recorded as each step lands, so the plan stays an accurate record.
   out, YES returns to INIT with every flight and VAB panel hidden. Re-entering the VAB keeps
   all 3 parts.
 
+**Step 9**
+
+- *Step 9.3.1 stays open on purpose.* The `#loader` styles remain inline in `index.html`. The
+  step assumes `<link>` tags. `src/main.ts` imports the stylesheets instead (see the Step 1
+  note), so `base.css` arrives only after the JS bundle parses. Moving the loader rules there
+  gives an unstyled loading screen on first paint. That is the exact problem the inline block
+  solves. The rules also cannot use tokens, because `tokens.css` has not loaded yet.
+- *Rules ported out of `styles.css` before deleting it:* the universal margin and padding
+  reset, `html, body, #app` sizing, `canvas { display: block }`, `#hints` and
+  `#precision-indicator`. Everything else in the monolith styled markup that no longer exists.
+- *Precision lamp:* it now lives inside the telemetry panel, through `Hud.setPrecision()`.
+  As a floating element it collided with the orbit-map overlay at 900 px. Every screen corner
+  is already taken at that size.
+- *Hints overlay:* it starts hidden and `H` reveals it. The title card carries the same key
+  reference, and at 900 px there is no free space for a second copy. Its `z-index` is 60, so a
+  player who summons it sees it on top of the instruments rather than interleaved.
+- *Responsive pass at 900x640:* title, VAB, flight, orbit map and pause all report zero
+  overlaps and nothing off-screen. The one exception is the hints overlay when the player
+  turns it on, which covers the telemetry panel by design.
+- *Build:* `npm run build` passes, renderer plus Electron main and preload. The three webfonts
+  reach `dist/fonts/`. The 500 kB chunk warning is the pre-existing three.js bundle.
+- *Two items are for the repo owner:* Step 9.5.1, the spec §7.4 manual QA pass, and Step
+  9.5.4, the push and the PR. Automated checks stand at 99 tests. `tsc --noEmit` is clean.
+  The production build is clean.
+
 ---
 
 ## File Structure
@@ -2917,7 +2942,7 @@ Spec §5.5, §6.4"
 
 ### Task 9.1: Slow title orbit under reduced-motion
 
-- [ ] **Step 9.1.1: Modify `src/ui/menu-scene.ts`**
+- [x] **Step 9.1.1: Modify `src/ui/menu-scene.ts`**
 
 In the camera update (around L166, `time * 0.08`), gate on reduced-motion:
 
@@ -2930,7 +2955,7 @@ const angle = this.time * 0.08 * speedScale;
 
 ### Task 9.2: ARIA on canvas instruments
 
-- [ ] **Step 9.2.1: Add aria-labels to navball, orbit-map canvas, HUD panel**
+- [x] **Step 9.2.1: Add aria-labels to navball, orbit-map canvas, HUD panel**
 
 In `main.ts` where these are created (or in their constructors), set:
 ```ts
@@ -2947,22 +2972,22 @@ The navball's aria-label could be dynamic ("pitch +30, heading 090") but static 
 
 Cut the `<style>` block from `index.html` `<head>` and paste its contents into `base.css` (tokenizing the hardcoded colors to `var(--...)` where reasonable — at minimum the background to `var(--phosphor-bg)`).
 
-- [ ] **Step 9.3.2: Remove the legacy `<link rel="stylesheet" href="/src/styles.css">` from index.html**
+- [x] **Step 9.3.2: Remove the legacy `<link rel="stylesheet" href="/src/styles.css">` from index.html**
 
-- [ ] **Step 9.3.3: Delete `src/styles.css`**
+- [x] **Step 9.3.3: Delete `src/styles.css`**
 
 ```bash
 git rm src/styles.css
 ```
 
-- [ ] **Step 9.3.4: Verify nothing references the old classes**
+- [x] **Step 9.3.4: Verify nothing references the old classes**
 
 Run: `grep -rE 'class="(panel|hud|menu-|vab-|flight-)' src/ | grep -v node_modules`
 Expected: every match is now a component class or screen CSS class, nothing pointing at deleted rules. If any old hardcoded-color CSS rule is referenced, port it to tokens.
 
 ### Task 9.4: Responsive final pass
 
-- [ ] **Step 9.4.1: Boot at 900×640 and verify no overlap**
+- [x] **Step 9.4.1: Boot at 900×640 and verify no overlap**
 
 Resize the browser window to 900×640. Walk every screen:
 - Title: controls card collapses to single column (media query in title.css).
@@ -2978,7 +3003,7 @@ If anything overlaps, add targeted `@media (max-width: 900px)` rules in the rele
 
 Document the results; file follow-up issues for anything that fails (don't expand scope here).
 
-- [ ] **Step 9.5.2: Run all tests + typecheck + build**
+- [x] **Step 9.5.2: Run all tests + typecheck + build**
 
 ```bash
 npx tsc --noEmit
@@ -2987,7 +3012,7 @@ npx vite build --config vite.renderer.config.ts
 ```
 Expected: tsc exit 0; all tests green; build exit 0. (Recreate `vite.renderer.config.ts` temporarily for the build check, then delete.)
 
-- [ ] **Step 9.5.3: Commit + merge**
+- [x] **Step 9.5.3: Commit + merge**
 
 ```bash
 rm -f vite.renderer.config.ts

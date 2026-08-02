@@ -1,8 +1,4 @@
 import * as THREE from 'three';
-// Stylesheet order matters. The legacy monolith loads FIRST so the tokenized
-// sheets that follow win at equal specificity as each screen migrates to them;
-// styles.css is deleted outright in Step 9.
-import './styles.css';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/base.css';
@@ -329,7 +325,7 @@ hints.innerHTML = `
 `;
 document.body.appendChild(hints);
 // Restore hint visibility from localStorage (persists the H toggle across reloads).
-hints.style.display = localStorage.getItem('hintsVisible') !== 'false' ? 'block' : 'none';
+hints.style.display = localStorage.getItem('hintsVisible') === 'true' ? 'block' : 'none';
 input.onPressed('KeyH', () => {
   hints.style.display = hints.style.display === 'none' ? 'block' : 'none';
   localStorage.setItem('hintsVisible', hints.style.display === 'none' ? 'false' : 'true');
@@ -349,7 +345,7 @@ enterVab = () => {
   vabCam.attach(renderer.domElement);
   mainMenu.hide();
   ui.show();
-  hints.style.display = localStorage.getItem('hintsVisible') !== 'false' ? 'block' : 'none';
+  hints.style.display = localStorage.getItem('hintsVisible') === 'true' ? 'block' : 'none';
   fsm.transition('BUILD');
 };
 
@@ -357,24 +353,7 @@ enterVab = () => {
 ui.hide();
 hints.style.display = 'none';
 
-// Precision mode indicator (shown when CapsLock toggles precision controls on).
-const precisionIndicator = document.createElement('div');
-precisionIndicator.id = 'precision-indicator';
-precisionIndicator.textContent = 'PRECISION';
-Object.assign(precisionIndicator.style, {
-  position: 'absolute' as const,
-  top: '12px',
-  right: '12px',
-  color: '#44ddff',
-  font: 'bold 11px monospace',
-  background: 'rgba(0,20,40,0.7)',
-  border: '1px solid #44ddff',
-  borderRadius: '3px',
-  padding: '3px 8px',
-  zIndex: '15',
-  display: 'none',
-} as Partial<CSSStyleDeclaration>);
-document.body.appendChild(precisionIndicator);
+// The precision-mode lamp lives inside the telemetry panel — see Hud.
 
 let lastFrameTime = performance.now();
 let physicsAccumulator = 0;
@@ -420,7 +399,7 @@ function animate() {
       flightPrompts.update(flight);
       stagingDisplay.update(flight);
     }
-    precisionIndicator.style.display = controls.precisionMode ? 'block' : 'none';
+    hud.setPrecision(controls.precisionMode);
   }
   // Menu scene: render before VAB is entered. Slowly orbits the camera
   // around the crashed rocket debris on the moon surface.

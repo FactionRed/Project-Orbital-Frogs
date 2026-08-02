@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { buildProceduralBody } from '../rendering/procedural-planet';
 import { buildPartMesh } from '../rendering/part-models';
 import { getPartDef } from '../entities/parts-catalog';
+import { reducedMotionEnabled } from './theme';
 
 /**
  * 3D main menu background scene — a crashed rocket scattered on the moon's
@@ -163,7 +164,9 @@ export class MenuScene {
     // Distance ~18, height ~5 above surface, looking at the center of the debris.
     const radius = 18;
     const height = 5;
-    const angle = this.time * 0.08; // slow cinematic orbit
+    // Slow cinematic orbit — 4× slower again under reduced motion, since this
+    // is the one thing moving on the title screen and it never stops.
+    const angle = this.time * 0.08 * (reducedMotionEnabled() ? 0.25 : 1);
 
     const camPos = this._surfacePoint.clone()
       .addScaledVector(this._right, Math.cos(angle) * radius)

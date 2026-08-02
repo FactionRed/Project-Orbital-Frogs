@@ -20,6 +20,7 @@ export class Hud {
   private q: Readout;
   private soi: Readout;
   private sas: Readout;
+  private precisionLamp: HTMLElement;
   /** Tank capacity of the current vessel; -1 until the first update. */
   private maxFuel = -1;
 
@@ -50,9 +51,16 @@ export class Hud {
     this.soi.el.classList.add('readout--compact');
     this.sas.el.classList.add('readout--compact');
 
+    // Precision-steering lamp. It lives in the panel rather than floating in a
+    // corner of its own: at 900px every corner is already taken.
+    this.precisionLamp = document.createElement('div');
+    this.precisionLamp.id = 'precision-indicator';
+    this.precisionLamp.textContent = 'PRECISION';
+    this.precisionLamp.style.display = 'none';
+
     panel.el.append(
       this.altitude.el, this.velocity.el, this.apoapsis.el, this.periapsis.el,
-      this.q.el, this.soi.el, this.sas.el,
+      this.q.el, this.soi.el, this.sas.el, this.precisionLamp,
     );
 
     this.root.appendChild(panel.el);
@@ -62,6 +70,11 @@ export class Hud {
   /** Forget the previous vessel's tank capacity. Call when a flight starts. */
   resetMaxFuel(): void {
     this.maxFuel = -1;
+  }
+
+  /** Light the PRECISION lamp while CapsLock fine-steering is engaged. */
+  setPrecision(on: boolean): void {
+    this.precisionLamp.style.display = on ? 'block' : 'none';
   }
 
   update(flight: FlightController): void {
