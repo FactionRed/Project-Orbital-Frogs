@@ -36,6 +36,12 @@
      stripe on, reduced-motion turns it back off. */
   --scanline-stripe: transparent;
   --scrim: rgba(0, 0, 0, 0.6);
+
+  /* Orbit-map marker colors. Theme-independent: the 3D scene is not themed, so
+     the legend swatches must stay identical to the marker meshes in
+     orbit-map.ts (MARKER_COLORS). */
+  --map-ap: #ff5a5a;
+  --map-pe: #5ad1ff;
 }
 
 /* Modern theme: crisp, high-contrast, no CRT effects. Default. */

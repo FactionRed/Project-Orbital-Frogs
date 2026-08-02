@@ -1,1 +1,25 @@
-/* src/styles/screens/orbit-map.css — filled in Step 6. */
+/* src/styles/screens/orbit-map.css */
+#map-overlay {
+  position: fixed; top: var(--sp-3); left: var(--sp-3); z-index: 25;
+  min-width: 200px;
+  pointer-events: none;
+  display: none; /* shown when the map opens */
+  flex-direction: column; gap: var(--sp-1);
+}
+.orbit-help {
+  font-family: var(--font-body); font-size: 10px;
+  color: var(--ink-faint); letter-spacing: var(--tracking-mono);
+  margin-top: var(--sp-2);
+}
+/* Swatch colors mirror MARKER_COLORS in orbit-map.ts via the shared tokens. */
+.ap-pe-legend {
+  display: flex; gap: var(--sp-3); margin-top: var(--sp-2);
+  font-family: var(--font-body); font-size: var(--fs-label);
+}
+.legend-ap { color: var(--map-ap); }
+.legend-pe { color: var(--map-pe); }
+
+/* The map overlay sits where the VAB palette does; only one is ever visible. */
+@media (max-width: 900px) {
+  #map-overlay { min-width: 160px; }
+}

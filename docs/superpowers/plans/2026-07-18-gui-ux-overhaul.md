@@ -121,6 +121,23 @@ Recorded as each step lands, so the plan stays an accurate record.
   composite. A colour read straight after a state change gives the previous value. Set
   `transition: none` before the read.
 
+**Step 6**
+
+- *Legend colors:* Step 6.3.1 paints the Pe swatch with `--cyan`, and the Pe marker mesh was
+  blue (`0x4444ff`). The legend then names the wrong marker. `MARKER_COLORS` in
+  `orbit-map.ts` and the `--map-ap` and `--map-pe` tokens now hold the same two values. These
+  tokens sit on `:root`, not in a theme block, because the 3D scene carries no theme.
+- *Apsides:* two readouts with an `m` unit each, plus a `BODY` row. Escape shows `ESC` in the
+  caution state, the same as the flight HUD.
+- *Body labels:* `createBodyLabels` runs when the map opens, `updateBodyLabels` runs each
+  frame because Luna moves, and `clearBodyLabels` disposes the texture and the material.
+  Label size follows `mapDistance`, like the apsis markers, so it holds up at any zoom.
+- *Display mode:* `toggle()` sets `display: flex`, not `block`. The overlay is a column stack.
+- *Live check:* a stub flight in a circular orbit at 12000 m gives `Ap 12000 m`, `Pe 12000 m`
+  and `BODY TERRA`. Two label sprites sit above Terra and Luna. The marker meshes report
+  `#ff5a5a` and `#5ad1ff`, the same as the legend. Closing the map leaves zero sprites, zero
+  meshes and zero lines in the scene.
+
 ---
 
 ## File Structure
@@ -2197,11 +2214,11 @@ Spec §5.2, §6.2"
 
 ### Task 6.1: Restyle the overlay to use Panel + Readout
 
-- [ ] **Step 6.1.1: Read current `src/ui/orbit-map.ts`**
+- [x] **Step 6.1.1: Read current `src/ui/orbit-map.ts`**
 
 Note: it builds an overlay div with title, Ap/Pe text, and help line. It also manages the 3D scene's trajectory line + Ap/Pe sphere markers + ship marker.
 
-- [ ] **Step 6.1.2: Replace the overlay DOM with Panel + Readouts**
+- [x] **Step 6.1.2: Replace the overlay DOM with Panel + Readouts**
 
 ```ts
 // In orbit-map.ts constructor / build():
@@ -2236,7 +2253,7 @@ In `update()`, where the Ap/Pe numbers were set, set them via `this.apReadout.se
 
 ### Task 6.2: Add body labels in 3D
 
-- [ ] **Step 6.2.1: Add `TERRA` and `LUNA` text sprites when the map opens**
+- [x] **Step 6.2.1: Add `TERRA` and `LUNA` text sprites when the map opens**
 
 In `orbit-map.ts`, when building the map scene (where it adds the planet sphere), add labeled sprites:
 
@@ -2261,13 +2278,13 @@ function makeLabel(text: string, color: string): THREE.Sprite {
 
 Add `TERRA` at the planet center (offset above surface), `LUNA` at the moon. Add/remove these with the map open/close (dispose textures on close — same pattern as the existing markers).
 
-- [ ] **Step 6.2.2: Position labels above their body's north pole**
+- [x] **Step 6.2.2: Position labels above their body's north pole**
 
 Set `sprite.position` to the body position + a vertical offset (e.g. `body.data.radius * 1.1` along the body's "up"). Update each frame if the body moves.
 
 ### Task 6.3: orbit-map.css
 
-- [ ] **Step 6.3.1: Fill `src/styles/screens/orbit-map.css`**
+- [x] **Step 6.3.1: Fill `src/styles/screens/orbit-map.css`**
 
 ```css
 /* src/styles/screens/orbit-map.css */
@@ -2290,7 +2307,7 @@ Set `sprite.position` to the body position + a vertical offset (e.g. `body.data.
 
 ### Task 6.4: Verify + commit
 
-- [ ] **Step 6.4.1: Verify live**
+- [x] **Step 6.4.1: Verify live**
 
 Launch, press M. Confirm:
 - ORBITAL TRACK panel top-left with Ap/Pe readouts (units shown), BODY name.
@@ -2298,7 +2315,7 @@ Launch, press M. Confirm:
 - TERRA and LUNA labels visible on the 3D map.
 - Trajectory + markers unchanged.
 
-- [ ] **Step 6.4.2: Run tests + typecheck + commit**
+- [x] **Step 6.4.2: Run tests + typecheck + commit**
 
 ```bash
 npx tsc --noEmit && npx vitest run
