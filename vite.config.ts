@@ -44,5 +44,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // DOM-dependent suites opt in per-file with `// @vitest-environment jsdom`.
+    // setup-storage patches the localStorage gap described in that file.
+    setupFiles: ['./test/setup-storage.ts'],
   },
 });

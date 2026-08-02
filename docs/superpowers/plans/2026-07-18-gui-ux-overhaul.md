@@ -12,6 +12,35 @@
 
 ---
 
+## Execution notes (deviations from the plan as written)
+
+Recorded as each step lands, so the plan stays an accurate record.
+
+**Step 1**
+
+- *Branch:* the work uses the worktree branch `claude/project-todo-review-13e5ab`. It has the
+  same role as `feat/gui-ux-overhaul` in Step 0.4.
+- *Font URLs:* the two IBM Plex Mono URLs in Step 1.1.1 are stale. They return an HTML 404
+  page. The Google Fonts CSS API gives the current latin-subset URLs
+  (`fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700`). The VT323 URL still works.
+- *Stylesheet wiring:* `src/main.ts` imports the sheets. This matches the existing
+  `import './styles.css'` convention and replaces the `<link>` tags of Step 1.7.1. **The load
+  order is the opposite of Step 1.7.1.** The legacy monolith loads first. The tokenized sheets
+  load after it. In the plan's order, each legacy `#hud`, `#vab-ui` and `#main-menu` rule
+  out-specifies the new screen CSS. Steps 3 to 6 would then have no visible effect.
+- *Color literals in base.css:* the Step 1.5.1 scanline gradient uses `rgba()` literals. The
+  Step 1.4.1 test does not permit these outside `tokens.css`. The stripe is now the
+  `--scanline-stripe` token. It is transparent by default, opaque under vintage, and
+  transparent again under reduced motion. A `--scrim` token covers the Step 8 backdrop.
+- *jsdom:* `test/theme.test.ts` needs a DOM. Node 22 and later define their own
+  `globalThis.localStorage`. It is `undefined` without `--localstorage-file`. vitest 1.6 sees
+  the key and does not copy the working jsdom object over it. `test/setup-storage.ts` gives
+  the tests the browser contract again. Browsers and Electron do not use this file.
+- *Tokens test:* it also examines `src/styles/screens/*.css`. A `readdirSync` of `src/styles`
+  alone does not find these files.
+
+---
+
 ## File Structure
 
 **New files:**
@@ -53,17 +82,17 @@ The repo currently has the navball fix uncommitted on `master`, plus the new `do
 
 **Files:** none (git operations only).
 
-- [ ] **Step 0.1: Verify the navball tests still pass**
+- [x] **Step 0.1: Verify the navball tests still pass**
 
 Run: `cd "C:/Users/sydne/OneDrive/Documents/Ai Gaming/Projects/Project-Orbital-Frogs" && npx vitest run`
 Expected: 27 passed (13 original + 14 navball-orientation). If any fail, STOP — the navball fix is the foundation; do not proceed.
 
-- [ ] **Step 0.2: Typecheck clean**
+- [x] **Step 0.2: Typecheck clean**
 
 Run: `npx tsc --noEmit`
 Expected: exit 0, no output.
 
-- [ ] **Step 0.3: Commit the navball fix + docs on master**
+- [x] **Step 0.3: Commit the navball fix + docs on master**
 
 ```bash
 cd "C:/Users/sydne/OneDrive/Documents/Ai Gaming/Projects/Project-Orbital-Frogs"
@@ -78,7 +107,7 @@ git commit -m "fix(navball): singularity-free orientation math + UX/overhaul des
 
 Expected: commit succeeds; `git status` shows clean working tree.
 
-- [ ] **Step 0.4: Create and switch to the feature branch**
+- [x] **Step 0.4: Create and switch to the feature branch**
 
 ```bash
 git checkout -b feat/gui-ux-overhaul
@@ -103,7 +132,7 @@ Expected: on branch `feat/gui-ux-overhaul`.
 
 ### Task 1.1: Download and place the two webfonts
 
-- [ ] **Step 1.1.1: Download VT323 and IBM Plex Mono woff2 files**
+- [x] **Step 1.1.1: Download VT323 and IBM Plex Mono woff2 files**
 
 Run from the project root:
 ```bash
@@ -116,14 +145,14 @@ ls -la public/fonts/
 ```
 Expected: three `.woff2` files, each >10KB. If any download fails (Google occasionally changes URLs), fall back to downloading from the google-webfonts helper at `https://gwfh.mranftl.com/fonts` — pick VT323 regular and IBM Plex Mono regular+bold, woff2, subset Latin.
 
-- [ ] **Step 1.1.2: Verify the files are valid woff2 (not HTML error pages)**
+- [x] **Step 1.1.2: Verify the files are valid woff2 (not HTML error pages)**
 
 Run: `file public/fonts/*.woff2`
 Expected: each shows "Web Open Font Format (Version 2)" or similar binary signature — NOT "HTML document".
 
 ### Task 1.2: Write the fonts stylesheet
 
-- [ ] **Step 1.2.1: Create `src/styles/fonts.css`**
+- [x] **Step 1.2.1: Create `src/styles/fonts.css`**
 
 ```css
 /* src/styles/fonts.css — bundled webfonts (self-contained, no network dependency). */
@@ -152,7 +181,7 @@ Expected: each shows "Web Open Font Format (Version 2)" or similar binary signat
 
 ### Task 1.3: Write the tokens stylesheet
 
-- [ ] **Step 1.3.1: Create `src/styles/tokens.css`**
+- [x] **Step 1.3.1: Create `src/styles/tokens.css`**
 
 ```css
 /* src/styles/tokens.css — all design tokens. No other CSS file may define colors directly. */
@@ -238,7 +267,7 @@ Expected: each shows "Web Open Font Format (Version 2)" or similar binary signat
 
 ### Task 1.4: Write the failing tokens test
 
-- [ ] **Step 1.4.1: Create `test/tokens.test.ts`**
+- [x] **Step 1.4.1: Create `test/tokens.test.ts`**
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -301,14 +330,14 @@ describe('no hardcoded colors outside tokens.css', () => {
 });
 ```
 
-- [ ] **Step 1.4.2: Run the test to verify it fails**
+- [x] **Step 1.4.2: Run the test to verify it fails**
 
 Run: `npx vitest run test/tokens.test.ts`
 Expected: FAIL — `tokens.css` doesn't exist yet (readdirSync fails) OR the "no hardcoded colors" test fails because `src/styles.css` (the monolith) contains hex colors. Either failure is correct.
 
 ### Task 1.5: Write the base stylesheet
 
-- [ ] **Step 1.5.1: Create `src/styles/base.css`**
+- [x] **Step 1.5.1: Create `src/styles/base.css`**
 
 ```css
 /* src/styles/base.css — reset, base element styles, CRT scanline overlay. */
@@ -354,7 +383,7 @@ body[data-theme='vintage']::before {
 
 ### Task 1.6: Write the theme module + its test
 
-- [ ] **Step 1.6.1: Create `src/ui/theme.ts`**
+- [x] **Step 1.6.1: Create `src/ui/theme.ts`**
 
 ```ts
 // src/ui/theme.ts
@@ -416,7 +445,7 @@ export function initTheme(): void {
 }
 ```
 
-- [ ] **Step 1.6.2: Create `test/theme.test.ts`**
+- [x] **Step 1.6.2: Create `test/theme.test.ts`**
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -466,14 +495,14 @@ describe('theme module', () => {
 });
 ```
 
-- [ ] **Step 1.6.3: Run the theme tests to verify they fail/pass**
+- [x] **Step 1.6.3: Run the theme tests to verify they fail/pass**
 
 Run: `npx vitest run test/theme.test.ts`
 Expected: most PASS (the module exists). The "defaults to modern" test should pass. If the reduced-motion tests fail because the test environment's `localStorage`/`matchMedia` aren't available, install jsdom: `npm i -D jsdom` and add `environment: 'jsdom'` to `test/` in `vite.config.ts` (or per-file `// @vitest-environment jsdom` at the top of `test/theme.test.ts`).
 
 ### Task 1.7: Wire stylesheets into index.html + boot theme
 
-- [ ] **Step 1.7.1: Modify `index.html` — set html lang/data-theme, link the new stylesheets**
+- [x] **Step 1.7.1: Modify `index.html` — set html lang/data-theme, link the new stylesheets**
 
 Edit the `<html>` tag and `<head>` of `index.html`:
 
@@ -503,7 +532,7 @@ And just before the closing `</head>` (after the inline `<style>` block for `#lo
 
 (The screen-specific CSS files don't exist yet — Step 2-6 create them. For Step 1, create empty placeholder files so the `<link>`s don't 404 during verification.)
 
-- [ ] **Step 1.7.2: Create empty placeholder screen stylesheets + components.css**
+- [x] **Step 1.7.2: Create empty placeholder screen stylesheets + components.css**
 
 Run:
 ```bash
@@ -513,7 +542,7 @@ touch src/styles/components.css
 touch src/styles/screens/title.css src/styles/screens/vab.css src/styles/screens/flight-hud.css src/styles/screens/orbit-map.css
 ```
 
-- [ ] **Step 1.7.3: Boot the theme on startup — modify `src/main.ts`**
+- [x] **Step 1.7.3: Boot the theme on startup — modify `src/main.ts`**
 
 Find the line near the top of `src/main.ts` where assets/loader init happens (around the `const manager = new THREE.LoadingManager()` / `initAssets` area, ~L28-37). Just before the `assets.ready.then(...)` call, add:
 
@@ -525,7 +554,7 @@ initTheme();
 
 (Place the `import` at the top of the file with the other imports; place the `initTheme()` call in the bootstrap sequence before the loader fade.)
 
-- [ ] **Step 1.7.4: Verify the dev server boots with the new theme applied**
+- [x] **Step 1.7.4: Verify the dev server boots with the new theme applied**
 
 Run the dev server (renderer-only config):
 ```bash
@@ -550,7 +579,7 @@ If anything is broken, STOP and fix before continuing.
 
 ### Task 1.8: Commit Step 1
 
-- [ ] **Step 1.8.1: Run all tests + typecheck**
+- [x] **Step 1.8.1: Run all tests + typecheck**
 
 ```bash
 npx vitest run
@@ -558,13 +587,13 @@ npx tsc --noEmit
 ```
 Expected: all tests green (27 prior + new tokens/theme tests). tsc exit 0.
 
-- [ ] **Step 1.8.2: Clean up the temp renderer config**
+- [x] **Step 1.8.2: Clean up the temp renderer config**
 
 ```bash
 rm vite.renderer.config.ts
 ```
 
-- [ ] **Step 1.8.3: Commit**
+- [x] **Step 1.8.3: Commit**
 
 ```bash
 git add src/styles/ src/ui/theme.ts public/fonts/ test/tokens.test.ts test/theme.test.ts index.html src/main.ts package.json package-lock.json

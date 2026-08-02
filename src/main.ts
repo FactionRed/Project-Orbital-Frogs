@@ -1,5 +1,16 @@
 import * as THREE from 'three';
+// Stylesheet order matters. The legacy monolith loads FIRST so the tokenized
+// sheets that follow win at equal specificity as each screen migrates to them;
+// styles.css is deleted outright in Step 9.
 import './styles.css';
+import './styles/fonts.css';
+import './styles/tokens.css';
+import './styles/base.css';
+import './styles/components.css';
+import './styles/screens/title.css';
+import './styles/screens/vab.css';
+import './styles/screens/flight-hud.css';
+import './styles/screens/orbit-map.css';
 import { StateMachine } from './core/state-machine';
 import { Input } from './core/input';
 import { VabCamera } from './building/vab-camera';
@@ -20,6 +31,11 @@ import { MenuScene } from './ui/menu-scene';
 import { MainMenu } from './ui/main-menu';
 import type { ShipDesign } from './entities/ship';
 import { initAssets } from './assets';
+import { initTheme } from './ui/theme';
+
+// Apply the persisted theme before anything paints, so the loader and every
+// screen come up in the right palette.
+initTheme();
 
 // --- Asset loading + loading screen ---
 // The #loader overlay is in index.html (pure HTML/CSS) so it paints before the

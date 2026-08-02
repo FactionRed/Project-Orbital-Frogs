@@ -1,0 +1,89 @@
+/* src/styles/tokens.css — all design tokens. No other CSS file may define colors directly. */
+:root {
+  /* Typography */
+  --font-display: 'VT323', 'IBM Plex Mono', monospace;
+  --font-body: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --fs-readout: 32px;
+  --fs-label: 12px;
+  --fs-body: 14px;
+  --tracking-mono: 0.08em;
+
+  /* Spacing (4px base, rem-based for scaling) */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+
+  /* Radii */
+  --r-bezel: 2px;
+  --r-key: 1px;
+
+  /* Motion */
+  --t-fast: 80ms;
+  --t-med: 160ms;
+  --t-scanline-drift: 8s;
+  --t-toast: 4s;
+
+  /* CRT effect flags (swapped by theme) */
+  --crt-scanlines: 0;
+  --crt-bloom: 0;
+  --crt-flicker: 0;
+
+  /* Effect colors. Kept here (not in base.css) so tokens.css stays the single
+     place any color literal may appear. Default = invisible; vintage turns the
+     stripe on, reduced-motion turns it back off. */
+  --scanline-stripe: transparent;
+  --scrim: rgba(0, 0, 0, 0.6);
+}
+
+/* Modern theme: crisp, high-contrast, no CRT effects. Default. */
+[data-theme='modern'] {
+  --ink: #d8e4d0;
+  --ink-dim: #9aa89a;
+  --ink-faint: #5a6a5a;
+  --amber: #ffae42;
+  --warn: #ffd23f;
+  --green: #6bd96b;
+  --red: #ff5a5a;
+  --cyan: #5ad1ff;
+  --phosphor-bg: #0a0f0a;
+  --panel-bg: rgba(12, 18, 12, 0.85);
+  --panel-border: #2a3a2a;
+  --grid-line: rgba(120, 160, 120, 0.15);
+  --glow-phosphor: none;
+}
+
+/* Vintage theme: amber phosphor on black, CRT scanlines + bloom + flicker. */
+[data-theme='vintage'] {
+  --ink: #ffb86b;
+  --ink-dim: #c89a55;
+  --ink-faint: #7a5d33;
+  --amber: #ffae42;
+  --warn: #ffd23f;
+  --green: #88dd66;
+  --red: #ff6a3d;
+  --cyan: #ffc870;
+  --phosphor-bg: #0a0805;
+  --panel-bg: rgba(16, 10, 4, 0.88);
+  --panel-border: #5a3a1a;
+  --grid-line: rgba(255, 174, 66, 0.18);
+  --glow-phosphor: 0 0 6px var(--amber);
+  --crt-scanlines: 1;
+  --crt-bloom: 1;
+  --crt-flicker: 1;
+  --scanline-stripe: rgba(0, 0, 0, 0.15);
+}
+
+/* Reduced motion: suppress ALL motion regardless of chosen theme. Same
+   specificity as the theme blocks above but later in source order, so these
+   win even when [data-theme='vintage'] is set. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --crt-flicker: 0;
+    --crt-scanlines: 0;
+    --t-scanline-drift: 0s;
+    --scanline-stripe: transparent;
+  }
+}
