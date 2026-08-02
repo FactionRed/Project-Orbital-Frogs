@@ -39,6 +39,21 @@ Recorded as each step lands, so the plan stays an accurate record.
 - *Tokens test:* it also examines `src/styles/screens/*.css`. A `readdirSync` of `src/styles`
   alone does not find these files.
 
+**Step 2**
+
+- *Tooltip:* `.tooltip` uses `position: fixed`, not `position: absolute`. The class positions
+  itself from `getBoundingClientRect()`, which gives viewport coordinates. A CSS
+  `translateX(-50%)` centers the tooltip on its host. `attach()` also removes its listeners in
+  `detach()`, and it listens for `focus` and `blur` so keyboard users see the same text.
+- *Toast:* the tone type is `'info' | 'caution' | 'alarm'`, which agrees with the
+  `.toast[data-tone=...]` rules. Step 2.4.5 imports `BannerTone` instead, and that type has a
+  `success` member with no toast rule.
+- *Components:* `Readout` builds its children with `createElement` in place of `innerHTML`.
+  `Gauge` holds its threshold colors in one map. `DskyKey` also has `setWord` and `setHint`.
+- *Smoke test:* computed styles from the live page confirm that all 8 components change with
+  the theme. Sample the border of a `.dsky-key` more than 80 ms after the change. Its
+  `transition` property makes an immediate read give the previous color.
+
 ---
 
 ## File Structure
@@ -622,7 +637,7 @@ Expected: commit succeeds; working tree clean.
 
 ### Task 2.1: Write components.css (all 8 classes)
 
-- [ ] **Step 2.1.1: Fill `src/styles/components.css`**
+- [x] **Step 2.1.1: Fill `src/styles/components.css`**
 
 ```css
 /* src/styles/components.css — all 8 component classes. Consumes only tokens. */
@@ -834,7 +849,7 @@ Expected: commit succeeds; working tree clean.
 
 ### Task 2.2: Readout component (TDD)
 
-- [ ] **Step 2.2.1: Write the failing test `test/readout.test.ts`**
+- [x] **Step 2.2.1: Write the failing test `test/readout.test.ts`**
 
 ```ts
 // @vitest-environment jsdom
@@ -868,12 +883,12 @@ describe('Readout component', () => {
 });
 ```
 
-- [ ] **Step 2.2.2: Run the test to verify it fails**
+- [x] **Step 2.2.2: Run the test to verify it fails**
 
 Run: `npx vitest run test/readout.test.ts`
 Expected: FAIL — `Readout` module doesn't exist (import error).
 
-- [ ] **Step 2.2.3: Implement `src/ui/components/readout.ts`**
+- [x] **Step 2.2.3: Implement `src/ui/components/readout.ts`**
 
 ```ts
 // src/ui/components/readout.ts
@@ -907,14 +922,14 @@ export class Readout {
 }
 ```
 
-- [ ] **Step 2.2.4: Run the test to verify it passes**
+- [x] **Step 2.2.4: Run the test to verify it passes**
 
 Run: `npx vitest run test/readout.test.ts`
 Expected: 4 tests PASS.
 
 ### Task 2.3: Gauge component (TDD)
 
-- [ ] **Step 2.3.1: Write the failing test `test/gauge.test.ts`**
+- [x] **Step 2.3.1: Write the failing test `test/gauge.test.ts`**
 
 ```ts
 // @vitest-environment jsdom
@@ -946,12 +961,12 @@ describe('Gauge component', () => {
 });
 ```
 
-- [ ] **Step 2.3.2: Run the test to verify it fails**
+- [x] **Step 2.3.2: Run the test to verify it fails**
 
 Run: `npx vitest run test/gauge.test.ts`
 Expected: FAIL — `Gauge` module doesn't exist.
 
-- [ ] **Step 2.3.3: Implement `src/ui/components/gauge.ts`**
+- [x] **Step 2.3.3: Implement `src/ui/components/gauge.ts`**
 
 ```ts
 // src/ui/components/gauge.ts
@@ -1007,7 +1022,7 @@ export class Gauge {
 }
 ```
 
-- [ ] **Step 2.3.4: Run the test to verify it passes**
+- [x] **Step 2.3.4: Run the test to verify it passes**
 
 Run: `npx vitest run test/gauge.test.ts`
 Expected: 3 tests PASS.
@@ -1016,7 +1031,7 @@ Expected: 3 tests PASS.
 
 These six are simple DOM builders; they're verified by the manual smoke page in Task 2.5 and by their consumers in Steps 3-8. Writing unit tests for pure DOM construction has diminishing returns (the review-skill warns against testing mock-y things); instead each gets a clear constructor + setter contract in code comments.
 
-- [ ] **Step 2.4.1: Implement `src/ui/components/panel.ts`**
+- [x] **Step 2.4.1: Implement `src/ui/components/panel.ts`**
 
 ```ts
 // src/ui/components/panel.ts
@@ -1031,7 +1046,7 @@ export class Panel {
 }
 ```
 
-- [ ] **Step 2.4.2: Implement `src/ui/components/dsky-key.ts`**
+- [x] **Step 2.4.2: Implement `src/ui/components/dsky-key.ts`**
 
 ```ts
 // src/ui/components/dsky-key.ts
@@ -1065,7 +1080,7 @@ export class DskyKey {
 }
 ```
 
-- [ ] **Step 2.4.3: Implement `src/ui/components/toggle.ts`**
+- [x] **Step 2.4.3: Implement `src/ui/components/toggle.ts`**
 
 ```ts
 // src/ui/components/toggle.ts
@@ -1097,7 +1112,7 @@ export class Toggle {
 }
 ```
 
-- [ ] **Step 2.4.4: Implement `src/ui/components/banner.ts`**
+- [x] **Step 2.4.4: Implement `src/ui/components/banner.ts`**
 
 ```ts
 // src/ui/components/banner.ts
@@ -1137,7 +1152,7 @@ export class Banner {
 }
 ```
 
-- [ ] **Step 2.4.5: Implement `src/ui/components/toast.ts`**
+- [x] **Step 2.4.5: Implement `src/ui/components/toast.ts`**
 
 ```ts
 // src/ui/components/toast.ts
@@ -1170,7 +1185,7 @@ export class Toast {
 }
 ```
 
-- [ ] **Step 2.4.6: Implement `src/ui/components/tooltip.ts`**
+- [x] **Step 2.4.6: Implement `src/ui/components/tooltip.ts`**
 
 ```ts
 // src/ui/components/tooltip.ts
@@ -1210,7 +1225,7 @@ export class Tooltip {
 }
 ```
 
-- [ ] **Step 2.4.7: Implement the barrel `src/ui/components/index.ts`**
+- [x] **Step 2.4.7: Implement the barrel `src/ui/components/index.ts`**
 
 ```ts
 // src/ui/components/index.ts
@@ -1229,7 +1244,7 @@ export { Tooltip } from './tooltip';
 
 ### Task 2.5: Manual smoke verification
 
-- [ ] **Step 2.5.1: Typecheck + run all tests**
+- [x] **Step 2.5.1: Typecheck + run all tests**
 
 ```bash
 npx tsc --noEmit
@@ -1237,7 +1252,7 @@ npx vitest run
 ```
 Expected: tsc exit 0; all tests green (27 + new tokens/theme/readout/gauge tests).
 
-- [ ] **Step 2.5.2: Visual smoke check via the dev server + `__game`**
+- [x] **Step 2.5.2: Visual smoke check via the dev server + `__game`**
 
 Start the dev server (same `vite.renderer.config.ts` pattern as Step 1.7.4). In the browser console, instantiate each component and append to body:
 
@@ -1256,7 +1271,7 @@ Expected: each component renders with the Modern theme styling. Toggle the theme
 
 ### Task 2.6: Commit Step 2
 
-- [ ] **Step 2.6.1: Commit**
+- [x] **Step 2.6.1: Commit**
 
 ```bash
 git add src/ui/components/ src/styles/components.css test/readout.test.ts test/gauge.test.ts
