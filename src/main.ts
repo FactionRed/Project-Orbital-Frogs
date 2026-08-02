@@ -118,6 +118,7 @@ function launchFlight(design: ShipDesign) {
   controls = new FlightControls(input, flight);
   flightCam = new FlightCamera(vabCam.camera);
   flightCam.attach(renderer.domElement);
+  hud.resetMaxFuel(); // new vessel — recapture tank capacity on first update
   hud.show();
   navball.show();
   holdPanel.show();

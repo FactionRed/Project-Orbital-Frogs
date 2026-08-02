@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { FlightController } from '../flight/flight-controller';
 import { navballOrientation } from './navball-orientation';
+import { Panel } from './components';
 
 /**
  * KSP-style navball HUD instrument.
@@ -17,6 +18,7 @@ import { navballOrientation } from './navball-orientation';
  */
 export class NavBall {
   private canvas: HTMLCanvasElement;
+  private bezel: HTMLElement;
   private ctx: CanvasRenderingContext2D;
   private readonly size = 160;
   // Last reported heading, carried over near the poles where the nose's
@@ -28,12 +30,21 @@ export class NavBall {
     this.canvas.id = 'navball';
     this.canvas.width = this.size;
     this.canvas.height = this.size;
-    document.body.appendChild(this.canvas);
+    this.canvas.setAttribute('role', 'img');
+    this.canvas.setAttribute('aria-label', 'Attitude indicator');
+
+    // The instrument sits in a labelled bezel, like the rest of the panel set.
+    // The bezel owns the screen position; the canvas is static inside it.
+    this.bezel = new Panel('ATTITUDE').el;
+    this.bezel.id = 'navball-bezel';
+    this.bezel.appendChild(this.canvas);
+    document.body.appendChild(this.bezel);
+
     this.ctx = this.canvas.getContext('2d')!;
   }
 
-  show(): void { this.canvas.style.display = 'block'; }
-  hide(): void { this.canvas.style.display = 'none'; }
+  show(): void { this.bezel.style.display = 'block'; }
+  hide(): void { this.bezel.style.display = 'none'; }
 
   update(flight: FlightController): void {
     const ctx = this.ctx;

@@ -70,9 +70,35 @@ Recorded as each step lands, so the plan stays an accurate record.
   A hard-coded `REL 0.4.0` drifts from the release as soon as the version changes.
 - *Short viewports:* the two cards are taller than a 640 px viewport. `body` has
   `overflow: hidden`, so the browser cuts off both ends and the player cannot scroll to
-  them. A `max-height: 760px` block
-  gives a compact layout. The single-column breakpoint moved from 700 px to 520 px, because
-  one column makes the controls card twice as tall. Verified at 700x640 and 900x640.
+  them. A `max-height: 760px` block gives a compact layout. The single-column breakpoint
+  moved from 700 px to 520 px, because one column makes the controls card twice as tall.
+  Verified at 700x640 and 900x640.
+
+**Step 4**
+
+- *Paths:* the files are `src/flight/hud.ts` and `src/ui/hold-panel.ts`. The plan puts both
+  under `src/ui/`. The class name is `Hud`, not `HUD`.
+- *Keep the existing math.* Step 4.1.1 measures altitude and Ap/Pe against `flight.planet`.
+  The current code uses `dominantBodyFor()`, which stays correct inside Luna's sphere of
+  influence. The rewrite keeps the original formulas, so Step 4.1.2 has nothing to restore.
+- *Ap/Pe:* two readouts, `Ap` and `Pe`, each with an `m` unit. One combined `Ap N / Pe N`
+  string does not fit the 32 px instrument face, and its `m` unit reads wrong on an escape
+  trajectory. Escape now shows `ESC` in the caution state.
+- *Fuel:* a second `Gauge`, labelled `840 / 1200`, with caution under 20 % and alarm at empty.
+  The Step 4.1.1 state expression tests `< 0.2` before `<= 0`, so its alarm branch never runs.
+- *SOI and SAS* carry words, not numbers. A `readout--compact` class drops them to body size.
+- *Navball bezel:* `NavBall` builds its own `Panel('ATTITUDE')`, and `show` and `hide` act on
+  the bezel. Step 4.5 does this from `main.ts`, which needs the canvas to become public.
+- *Hold panel position:* `right: calc(50% + 100px)`. The `margin-right: 220px` in the legacy
+  CSS, which Step 4.5.1 keeps as 220 px, has no effect on a centered fixed box. The keys sat
+  directly on top of the navball. Below 1100 px they move above the ball instead.
+- *Toasts:* both live in one `#toast-stack` flex column. Fixed offsets break as soon as a
+  prompt wraps to a second line. The stack also has a width cap, or the ignite prompt runs
+  under the telemetry panel at 900 px.
+- *Tests:* `test/hud.test.ts` drives `Hud.update()` with a structural stub of
+  `FlightController`, 11 tests. Step 4 plans no tests. Units, the fuel denominator and the Q
+  threshold are exactly where a silent regression hides. Layout has no test. A live check at
+  1280x800 and 900x640 confirms that no two panels overlap.
 
 ---
 
@@ -1546,7 +1572,7 @@ Spec §5.1, §6.3"
 
 ### Task 4.1: Rewrite hud.ts to use Readout + Gauge + Panel
 
-- [ ] **Step 4.1.1: Rewrite `src/ui/hud.ts`**
+- [x] **Step 4.1.1: Rewrite `src/ui/hud.ts`**
 
 Read the current `hud.ts` to preserve its `update(flight)` signature and the readout list. Replace the DOM construction with:
 
@@ -1638,7 +1664,7 @@ function computeQ(flight: FlightController): number {
 
 **IMPORTANT for the executor:** the `computeApPe` and `computeQ` functions above throw — they must be replaced with the real formulas copied from the pre-Step-4 `hud.ts` (visible in the file before this edit). The formulas involve `apoapsisPeriapsis(r, v, mu, radius)` from `src/physics/orbit-math` and the dynamic-pressure calc around `ATMOSPHERE.height`.
 
-- [ ] **Step 4.1.2: Replace the TODO throws with the real formulas copied from the prior hud.ts**
+- [x] **Step 4.1.2: Replace the TODO throws with the real formulas copied from the prior hud.ts**
 
 Before committing, open the previous version of `hud.ts` (via `git show HEAD:src/ui/hud.ts`) and copy the Ap/Pe and Q formulas into `computeApPe` and `computeQ`. Verify the test for `hud` (none exists; manual check) shows non-NaN values.
 
@@ -1646,7 +1672,7 @@ Before committing, open the previous version of `hud.ts` (via `git show HEAD:src
 
 The `maxFuel` capture above only sets once. If the player builds a different rocket, the denominator is wrong. Fix: reset on flight-scene enter.
 
-- [ ] **Step 4.2.1: Expose a `resetMaxFuel()` method on HUD and call it from `launchFlight` in `main.ts`**
+- [x] **Step 4.2.1: Expose a `resetMaxFuel()` method on HUD and call it from `launchFlight` in `main.ts`**
 
 In `hud.ts`, add a public method:
 ```ts
@@ -1656,7 +1682,7 @@ In `main.ts` `launchFlight()` (around L88-114), after `hud = new HUD()`, call `h
 
 ### Task 4.3: Rewrite hold-panel.ts — labeled DSKY keys
 
-- [ ] **Step 4.3.1: Rewrite `src/ui/hold-panel.ts`**
+- [x] **Step 4.3.1: Rewrite `src/ui/hold-panel.ts`**
 
 Read the current file first (`src/ui/hold-panel.ts`) to preserve its `onMode(mode)` callback and the six modes. Replace button construction with `DskyKey` instances:
 
@@ -1704,11 +1730,11 @@ Wire the existing `main.ts` `holdPanel.onMode` callback to call `flightControlle
 
 ### Task 4.4: Rewrite staging-display.ts and flight-prompts.ts
 
-- [ ] **Step 4.4.1: Update `src/ui/staging-display.ts` to use `.dsky-key`-styled slots**
+- [x] **Step 4.4.1: Update `src/ui/staging-display.ts` to use `.dsky-key`-styled slots**
 
 Read the current file. The slots are currently divs with inline classes. Wrap the panel in `new Panel('STAGING')`, and give each slot `class="dsky-key staging-slot"` with `data-active` set on the current stage. The slot's `pointer-events: none` stays (add it in `flight-hud.css`).
 
-- [ ] **Step 4.4.2: Update `src/ui/flight-prompts.ts` to use the `Toast` component**
+- [x] **Step 4.4.2: Update `src/ui/flight-prompts.ts` to use the `Toast` component**
 
 Replace the hand-rolled `#flight-prompt` and `#fuel-prompt` divs with two `Toast` instances:
 
@@ -1753,7 +1779,7 @@ Adjust `main.ts` to call `flightPrompts.update(flight)` in the animate loop wher
 
 ### Task 4.5: flight-hud.css
 
-- [ ] **Step 4.5.1: Fill `src/styles/screens/flight-hud.css`**
+- [x] **Step 4.5.1: Fill `src/styles/screens/flight-hud.css`**
 
 ```css
 /* src/styles/screens/flight-hud.css */
@@ -1807,7 +1833,7 @@ document.body.appendChild(bezel.el);
 
 ### Task 4.6: Verify + commit
 
-- [ ] **Step 4.6.1: Verify live**
+- [x] **Step 4.6.1: Verify live**
 
 Boot, launch a default rocket. Confirm:
 - HUD top-right is a TELEMETRY panel; ALT/VEL/Ap-Pe/FUEL/Q/SOI/SAS readouts with units; FUEL shows `1200 / 1200`; Q shows `kPa`.
@@ -1818,14 +1844,14 @@ Boot, launch a default rocket. Confirm:
 - Navball wrapped in ATTITUDE bezel.
 - Vintage toggle in devtools flips palette + scanlines.
 
-- [ ] **Step 4.6.2: Run tests + typecheck**
+- [x] **Step 4.6.2: Run tests + typecheck**
 
 ```bash
 npx tsc --noEmit && npx vitest run
 ```
 Expected: green.
 
-- [ ] **Step 4.6.3: Commit**
+- [x] **Step 4.6.3: Commit**
 
 ```bash
 git add src/ui/hud.ts src/ui/hold-panel.ts src/ui/staging-display.ts src/ui/flight-prompts.ts src/styles/screens/flight-hud.css src/main.ts
