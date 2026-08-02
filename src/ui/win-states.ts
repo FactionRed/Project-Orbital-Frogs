@@ -2,42 +2,38 @@
 import type { FlightController } from '../flight/flight-controller';
 import { isClosedOrbit } from '../physics/orbit-math';
 import { MOON_SOI } from '../physics/constants';
+import { isCrashImpact, IMPACT_CRASH_THRESHOLD } from '../flight/crash-detection';
+import { Banner } from './components';
+import type { BannerTone } from './components';
 
 export type WinEvent = 'orbit' | 'moon-landed' | 'safe-return' | 'crash';
 
 export class WinStates {
-  private banner: HTMLElement;
-  private bannerText: HTMLElement;
+  private banner: Banner;
   private bannerBtn: HTMLButtonElement;
   private achieved = new Set<WinEvent>();
   private wasInMoonSoi = false;
-  private hideTimer = 0;
   onEvent: (e: WinEvent) => void = () => {};
   onBuildAgain: () => void = () => {};
 
   constructor() {
-    this.banner = document.createElement('div');
-    this.banner.id = 'win-banner';
-    this.banner.innerHTML = `
-      <div id="banner-text"></div>
-      <button id="banner-btn">Build Again</button>
-    `;
-    document.body.appendChild(this.banner);
-    this.bannerText = this.banner.querySelector('#banner-text')!;
-    this.bannerBtn = this.banner.querySelector('#banner-btn')!;
+    this.banner = new Banner();
+    this.banner.el.id = 'win-banner';
+    this.bannerBtn = document.createElement('button');
+    this.bannerBtn.id = 'banner-btn';
+    this.bannerBtn.type = 'button';
+    this.bannerBtn.className = 'dsky-key';
+    this.bannerBtn.textContent = 'BUILD AGAIN';
+    this.bannerBtn.style.display = 'none';
     this.bannerBtn.addEventListener('click', () => this.onBuildAgain());
+    this.banner.el.appendChild(this.bannerBtn);
+    document.body.appendChild(this.banner.el);
   }
 
-  private show(text: string, terminal = false): void {
-    this.bannerText.textContent = text;
-    this.banner.style.display = 'block';
-    this.bannerBtn.style.display = terminal ? 'inline-block' : 'none';
-    window.clearTimeout(this.hideTimer);
-    if (!terminal) {
-      this.hideTimer = window.setTimeout(() => {
-        this.banner.style.display = 'none';
-      }, 4000);
-    }
+  /** `terminal` banners stay up and offer BUILD AGAIN; others fade after 4s. */
+  private show(text: string, tone: BannerTone = 'info', detail = '', terminal = false): void {
+    this.banner.show(text, tone, detail, terminal);
+    this.bannerBtn.style.display = terminal ? 'inline-flex' : 'none';
   }
 
   update(flight: FlightController): void {
@@ -65,7 +61,7 @@ export class WinStates {
       isClosedOrbit(r, v, planet.mu, planet.data.radius)
     ) {
       this.achieved.add('orbit');
-      this.show('🌱 Orbit Achieved!');
+      this.show('🌱 ORBIT ACHIEVED', 'success');
       this.onEvent('orbit');
     }
 
@@ -83,9 +79,9 @@ export class WinStates {
         ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
         : 0;
       const vertSpeed = Math.abs(radialVel);
-      if (moonAlt < 50 && vertSpeed < 30) {
+      if (moonAlt < 50 && vertSpeed < IMPACT_CRASH_THRESHOLD) {
         this.achieved.add('moon-landed');
-        this.show('🌕 Lunar Landing!');
+        this.show('🌕 LUNAR LANDING', 'success');
         this.onEvent('moon-landed');
       }
     }
@@ -102,12 +98,27 @@ export class WinStates {
       : 0;
     const moonCrashed = inMoonSoi && (
       moonDist < flight.moon.data.radius - 10 ||
-      (moonAltitude < 50 && Math.abs(moonRadialVel) >= 30)
+      (moonAltitude < 50 && Math.abs(moonRadialVel) >= IMPACT_CRASH_THRESHOLD)
     );
-    if (planetAlt < -10 || moonCrashed) {
+
+    // Critical #1: hitting Terra used to be silent. The altitude test never
+    // fired because clampToTerrain holds the ship AT the surface, so planetAlt
+    // never went below -10. The impact speed the clamp recorded is the signal.
+    const planetImpactCrash =
+      !inMoonSoi
+      && flight.peakImpactBody === 'planet'
+      && isCrashImpact(flight.peakImpactSpeed);
+
+    if (planetAlt < -10 || moonCrashed || planetImpactCrash) {
       if (!this.achieved.has('crash')) {
         this.achieved.add('crash');
-        this.show('💥 Crashed — Revert with F1');
+        const speed = Math.max(flight.peakImpactSpeed, 0);
+        this.show(
+          '■ LITHOBRAKE',
+          'alarm',
+          `impact at ${speed.toFixed(0)} m/s · press F1 to revert`,
+          true, // terminal: a wreck must not scroll away while it's being read
+        );
         this.onEvent('crash');
       }
     }
@@ -116,7 +127,7 @@ export class WinStates {
     if (this.wasInMoonSoi && !inMoonSoi && !this.achieved.has('safe-return')) {
       if (planetAlt < 100 && Math.hypot(v[0], v[1], v[2]) < 50) {
         this.achieved.add('safe-return');
-        this.show('🏆 Mission Complete! Safe Return.', true);
+        this.show('🏆 MISSION COMPLETE', 'success', 'safe return', true);
         this.onEvent('safe-return');
       }
     }
@@ -125,11 +136,11 @@ export class WinStates {
   reset(): void {
     this.achieved.clear();
     this.wasInMoonSoi = false;
-    window.clearTimeout(this.hideTimer);
-    this.banner.style.display = 'none';
+    this.banner.hide();
+    this.bannerBtn.style.display = 'none';
   }
 
   hide(): void {
-    this.banner.style.display = 'none';
+    this.banner.hide();
   }
 }

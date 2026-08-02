@@ -45,6 +45,18 @@ export class FlightController {
   private stages: Stage[] = [];
   /** Index of the current (next-to-fire) stage. Public for UI. */
   currentStageIndex = 0;
+  /**
+   * Hardest terrain contact this flight, as inward radial speed in m/s.
+   * -1 until the ship first touches down.
+   *
+   * The peak, not the most recent value: clampToTerrain zeroes the inward
+   * velocity on contact, so the following physics step would record ~0 and
+   * erase the number that says whether the ship survived. Two physics steps
+   * can run between UI updates, so "most recent" loses the impact outright.
+   */
+  peakImpactSpeed = -1;
+  /** Which body the peak impact was against. */
+  peakImpactBody: 'planet' | 'moon' | null = null;
   /** Whether the current stage has been activated (first Space press).
    *  First press = activate (engine fires via throttle, no jettison).
    *  Second press = jettison spent stage + advance to next. */
@@ -548,6 +560,13 @@ export class FlightController {
           const vz = sb.body.velocity.z;
           const radialVel = vx * nx + vy * ny + vz * nz; // >0 = moving away, <0 = sinking in
           if (radialVel < 0) {
+            // Record how hard this hit was BEFORE the velocity is zeroed —
+            // this is the only moment the impact speed exists.
+            const inward = -radialVel;
+            if (inward > this.peakImpactSpeed) {
+              this.peakImpactSpeed = inward;
+              this.peakImpactBody = body === this.planet ? 'planet' : 'moon';
+            }
             // Remove the inward component, keep the tangential.
             sb.body.velocity.set(
               vx - radialVel * nx,

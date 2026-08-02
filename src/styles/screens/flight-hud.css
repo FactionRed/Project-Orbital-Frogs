@@ -98,6 +98,37 @@
   #toast-stack { top: calc(var(--sp-4) + 260px); }
 }
 
+/* Mission-event banner. The id repeats the legacy selector because the legacy
+   green slab out-specifies the .banner component class. */
+#win-banner {
+  position: fixed; top: 30%; left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  text-align: center;
+  pointer-events: auto;
+  max-width: min(90vw, 40rem);
+}
+#win-banner[data-tone='success'] { border-color: var(--green); }
+#win-banner[data-tone='info']    { border-color: var(--cyan); }
+#win-banner[data-tone='alarm']   { border-color: var(--red); }
+#win-banner #banner-btn {
+  margin-top: var(--sp-3);
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-key);
+  color: var(--ink);
+  padding: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+#win-banner #banner-btn:hover { border-color: var(--amber); background: transparent; color: var(--ink); }
+
 /* Below ~1100px there is no room beside the navball, so the keys move above it
  * and re-center. */
 @media (max-width: 1100px) {

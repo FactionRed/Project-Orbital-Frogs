@@ -138,6 +138,28 @@ Recorded as each step lands, so the plan stays an accurate record.
   `#ff5a5a` and `#5ad1ff`, the same as the legend. Closing the map leaves zero sprites, zero
   meshes and zero lines in the scene.
 
+**Step 7**
+
+- *Name and semantics:* the field is `peakImpactSpeed`, not `lastImpactSpeed`, and it holds
+  the hardest contact of the flight. `clampToTerrain` zeroes the inward velocity on contact,
+  so the next physics step records about 0 and erases the number. Up to two physics steps run
+  between UI updates, so "most recent" loses the impact. A companion field,
+  `peakImpactBody`, records which body the ship hit.
+- *Why the old check missed it:* `planetAlt < -10` never became true, because `clampToTerrain`
+  holds the ship AT the surface. The recorded impact speed is the only surviving evidence.
+- *Banner:* `WinStates` now uses the `Banner` component. `show(text, tone, detail, terminal)`
+  matches the component. A crash is terminal and offers BUILD AGAIN. The plan's Step 7.3.2
+  keeps a separate `hideTimer` in `WinStates`, but `Banner` already owns that timer.
+- *Threshold:* the moon branches use `IMPACT_CRASH_THRESHOLD` in place of a repeated `30`.
+- *Tests:* `test/crash-detection.test.ts` covers the detector, 5 tests.
+  `test/win-states.test.ts` covers the branch itself, 9 tests. A hard Terra impact raises a
+  terminal alarm that never auto-hides. A soft landing and an untouched ship stay silent. An
+  impact against Luna does not blame Terra. `reset()` re-arms for the next flight. Step 7
+  plans a test for the detector only, and the branch is the actual defect.
+- *Out of scope, found while testing:* a ship at rest below Luna's surface passes the
+  `moon-landed` test before the crash test runs, so `moon-landed` fires first. This behavior
+  predates the overhaul, and it belongs to separate work.
+
 ---
 
 ## File Structure
@@ -2343,7 +2365,7 @@ Spec §5.4"
 
 ### Task 7.1: Write the failing test (pure-function detector)
 
-- [ ] **Step 7.1.1: Create `test/crash-detection.test.ts`**
+- [x] **Step 7.1.1: Create `test/crash-detection.test.ts`**
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2366,12 +2388,12 @@ describe('isCrashImpact', () => {
 });
 ```
 
-- [ ] **Step 7.1.2: Run the test to verify it fails**
+- [x] **Step 7.1.2: Run the test to verify it fails**
 
 Run: `npx vitest run test/crash-detection.test.ts`
 Expected: FAIL — `isCrashImpact` doesn't exist.
 
-- [ ] **Step 7.1.3: Create `src/flight/crash-detection.ts`**
+- [x] **Step 7.1.3: Create `src/flight/crash-detection.ts`**
 
 ```ts
 // src/flight/crash-detection.ts
@@ -2386,14 +2408,14 @@ export function isCrashImpact(inwardRadialSpeed: number): boolean {
 }
 ```
 
-- [ ] **Step 7.1.4: Run the test to verify it passes**
+- [x] **Step 7.1.4: Run the test to verify it passes**
 
 Run: `npx vitest run test/crash-detection.test.ts`
 Expected: 4 PASS.
 
 ### Task 7.2: Record lastImpactSpeed in flight-controller.ts
 
-- [ ] **Step 7.2.1: Modify `src/flight/flight-controller.ts`**
+- [x] **Step 7.2.1: Modify `src/flight/flight-controller.ts`**
 
 Find `clampToTerrain` (around L521). Just *before* the line that zeroes the inward velocity, capture it. Add a public field:
 
@@ -2424,7 +2446,7 @@ if (dist > 1e-3) {
 
 ### Task 7.3: Add the planet-crash branch in win-states.ts
 
-- [ ] **Step 7.3.1: Modify `src/ui/win-states.ts`**
+- [x] **Step 7.3.1: Modify `src/ui/win-states.ts`**
 
 In `update()`, after the moon-crashed block (~L107) and before the `if (planetAlt < -10 || moonCrashed)` line, add a planet-impact branch:
 
@@ -2449,7 +2471,7 @@ Also: the existing `show(text, terminal)` calls elsewhere need to keep working. 
 1. Refactor `show` to `show(text, tone, detail, terminal)` (matches the `Banner` component from Step 2 — preferred).
 2. Add an overload.
 
-- [ ] **Step 7.3.2: Refactor `WinStates.show()` to use the Banner component + new signature**
+- [x] **Step 7.3.2: Refactor `WinStates.show()` to use the Banner component + new signature**
 
 Replace the existing `show` method with:
 
@@ -2479,14 +2501,14 @@ this.bannerBtn.addEventListener('click', () => this.onBuildAgain());
 
 ### Task 7.4: Verify + commit
 
-- [ ] **Step 7.4.1: Verify live (reproduce pof-08-silent-crash scenario)**
+- [x] **Step 7.4.1: Verify live (reproduce pof-08-silent-crash scenario)**
 
 Boot, `__game.build()`, `__game.launch()`, arm + full throttle, wait for fuel to deplete and the ship to fall back. Confirm:
 - On impact: `■ LITHOBRAKE / impact at N m/s` red banner appears, stays (terminal), BUILD AGAIN button visible.
 - A soft landing (under 30 m/s) shows nothing.
 - A moon crash (fly to the moon, smash in) still triggers (existing behavior preserved).
 
-- [ ] **Step 7.4.2: Run tests + typecheck + commit**
+- [x] **Step 7.4.2: Run tests + typecheck + commit**
 
 ```bash
 npx tsc --noEmit && npx vitest run
