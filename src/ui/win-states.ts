@@ -5,6 +5,18 @@ import { MOON_SOI } from '../physics/constants';
 
 export type WinEvent = 'orbit' | 'moon-landed' | 'safe-return' | 'crash';
 
+/** Radial speed at/above which touching a surface is an impact, not a landing (m/s). */
+export const IMPACT_CRASH_THRESHOLD = 30;
+/** Altitude below which the ship counts as being at the surface rather than above it (m). */
+export const SURFACE_CONTACT_ALT = 50;
+/**
+ * How far below a body's mean radius the ship may sit and still be "on" it (m).
+ * Terrain dips below the mean radius, so a legitimate landing reads slightly
+ * negative; deeper than this the ship is inside the body, i.e. wreckage. Shared
+ * by the landing and crash tests so the two verdicts stay mutually exclusive.
+ */
+export const SURFACE_PENETRATION_TOLERANCE = 10;
+
 export class WinStates {
   private banner: HTMLElement;
   private bannerText: HTMLElement;
@@ -69,21 +81,32 @@ export class WinStates {
       this.onEvent('orbit');
     }
 
-    // Moon landed: in moon SOI, very low radial speed, close to surface.
+    if (inMoonSoi) this.wasInMoonSoi = true;
+
+    // Landing and impact are decided from one set of moon-relative numbers, so a
+    // single position can never satisfy both.
+    //
+    // `moonAlt` is measured from Luna's center, so it goes NEGATIVE inside the
+    // body: wreckage buried under the surface must not read as a gentle
+    // touchdown merely because it has come to rest.
+    //
     // "Vertical speed" is the component of velocity along the radial direction
     // from moon center to ship — NOT world-Y, because the moon orbits in the
     // XZ plane and its surface normal can point in any direction.
-    if (inMoonSoi && !this.achieved.has('moon-landed')) {
-      this.wasInMoonSoi = true;
-      const moonAlt = moonDist - flight.moon.data.radius;
-      const moonDx = root.position.x - moonPos.x;
-      const moonDy = root.position.y - moonPos.y;
-      const moonDz = root.position.z - moonPos.z;
-      const radialVel = moonDist > 1e-3
-        ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
-        : 0;
-      const vertSpeed = Math.abs(radialVel);
-      if (moonAlt < 50 && vertSpeed < 30) {
+    const moonAlt = moonDist - flight.moon.data.radius;
+    const moonDx = root.position.x - moonPos.x;
+    const moonDy = root.position.y - moonPos.y;
+    const moonDz = root.position.z - moonPos.z;
+    const radialVel = moonDist > 1e-3
+      ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
+      : 0;
+    const vertSpeed = Math.abs(radialVel);
+    const onMoonSurface =
+      moonAlt >= -SURFACE_PENETRATION_TOLERANCE && moonAlt < SURFACE_CONTACT_ALT;
+
+    // Moon landed: in moon SOI, on the surface, very low radial speed.
+    if (inMoonSoi && onMoonSurface && vertSpeed < IMPACT_CRASH_THRESHOLD) {
+      if (!this.achieved.has('moon-landed')) {
         this.achieved.add('moon-landed');
         this.show('🌕 Lunar Landing!');
         this.onEvent('moon-landed');
@@ -93,18 +116,11 @@ export class WinStates {
     // Crashed into either body.
     const planetAlt = Math.hypot(r[0], r[1], r[2]) - planet.data.radius;
     // Moon crash: inside the moon OR at the surface with high radial speed.
-    const moonAltitude = moonDist - flight.moon.data.radius;
-    const moonDx2 = root.position.x - moonPos.x;
-    const moonDy2 = root.position.y - moonPos.y;
-    const moonDz2 = root.position.z - moonPos.z;
-    const moonRadialVel = moonDist > 1e-3
-      ? (root.velocity.x * moonDx2 + root.velocity.y * moonDy2 + root.velocity.z * moonDz2) / moonDist
-      : 0;
     const moonCrashed = inMoonSoi && (
-      moonDist < flight.moon.data.radius - 10 ||
-      (moonAltitude < 50 && Math.abs(moonRadialVel) >= 30)
+      moonAlt < -SURFACE_PENETRATION_TOLERANCE ||
+      (onMoonSurface && vertSpeed >= IMPACT_CRASH_THRESHOLD)
     );
-    if (planetAlt < -10 || moonCrashed) {
+    if (planetAlt < -SURFACE_PENETRATION_TOLERANCE || moonCrashed) {
       if (!this.achieved.has('crash')) {
         this.achieved.add('crash');
         this.show('💥 Crashed — Revert with F1');
