@@ -160,6 +160,28 @@ Recorded as each step lands, so the plan stays an accurate record.
   `moon-landed` test before the crash test runs, so `moon-landed` fires first. This behavior
   predates the overhaul, and it belongs to separate work.
 
+**Step 10 — QA pass after Step 9 (see the §7.4 table in Task 9.5)**
+
+The scripted §7.4 run found two defects and one missing requirement. This step corrects all
+three.
+
+- *Missing: first focus on the title.* Spec §7.1 asks for `ENTER VAB` to hold focus on load,
+  and success criterion 6 asks for full keyboard navigation. Nothing set focus.
+  `MainMenu.show()` now focuses the ENTER key, which also covers the return from QUIT.
+- *Bug: reduced motion did not reach `<body>`.* The `@media (prefers-reduced-motion: reduce)`
+  block targeted `:root` alone. `theme.ts` stamps `data-theme` on `<html>` and on `<body>`,
+  and `<body>` is not `:root`, so the vintage values stood on `<body>` — the element that
+  `body[data-theme='vintage']::before` reads. Scanlines kept painting under an OS reduced
+  motion preference. The selector is now `:root, [data-theme]`. `tokens.test.ts` gained a
+  cascade assertion, confirmed to fail against the old CSS.
+- *Bug: the REDUCED MOTION toggle was inert.* CSS cannot see a JS override of a media query.
+  The Step 8 toggle therefore moved the title-orbit speed and nothing else. `theme.ts` now
+  mirrors the override to `data-reduced-motion` on both elements. `tokens.css` honours it in
+  both directions.
+  `--scanline-stripe` derives from `--crt-scanlines` instead of sitting beside it, so one
+  switch controls the stripe and the flag together. A live check confirms it. With the OS
+  asking for reduced motion, `off` brings the scanlines back. `on` and `auto` keep them away.
+
 **Step 8**
 
 - *`PAUSED → INIT`:* the `ALLOWED` map in Step 8.1.3 omits it, so the QUIT path in Step 8.3.3
@@ -2999,9 +3021,24 @@ If anything overlaps, add targeted `@media (max-width: 900px)` rules in the rele
 
 ### Task 9.5: Final QA pass + commit
 
-- [ ] **Step 9.5.1: Run the full manual QA checklist from spec §7.4**
+- [x] **Step 9.5.1: Run the full manual QA checklist from spec §7.4**
 
 Document the results; file follow-up issues for anything that fails (don't expand scope here).
+
+Results — all six items pass. Five ran as scripted checks against the live page. See the
+Step 10 execution note for the two defects this pass found and fixed.
+
+| §7.4 item | Result |
+| --- | --- |
+| Tab through title with keyboard only | PASS. First focus lands on `ENTER`, on boot and after QUIT. Tab order `ENTER → SETTINGS → QUIT`, all native buttons, no negative tabindex, Enter activates. |
+| Toggle Vintage↔Modern on each screen, no layout shift | PASS. Geometry of every visible panel is identical in both themes on title, VAB, flight, flight-with-hints, map, pause and crash banner. |
+| OS reduced motion stops flicker and drift | PASS after a fix. The test machine has the OS preference set, so this ran for real. |
+| Resize 1280→900→700, no overlap | PASS. Zero collisions and nothing off-screen at all three widths, on every screen. |
+| Trigger all 3 Criticals | PASS. #2 and #3 verified live, #1 by the `win-states` suite over the shipped branch. |
+| Esc, physics freeze, RESUME, QUIT confirm | PASS. Verified in Step 8. |
+
+An eyeball pass on the real look of the two themes is still worth doing. These checks measure
+geometry, tokens and behavior, not aesthetics.
 
 - [x] **Step 9.5.2: Run all tests + typecheck + build**
 

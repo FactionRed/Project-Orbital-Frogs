@@ -6,8 +6,10 @@ import {
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.removeAttribute('data-theme');
-  document.body.removeAttribute('data-theme');
+  for (const el of [document.documentElement, document.body]) {
+    el.removeAttribute('data-theme');
+    el.removeAttribute('data-reduced-motion');
+  }
 });
 
 describe('theme module', () => {
@@ -43,6 +45,30 @@ describe('theme module', () => {
     setReducedMotionOverride('on');
     setReducedMotionOverride('auto');
     expect(localStorage.getItem('orbital-reduced-motion-override')).toBeNull();
+  });
+
+  it('mirrors the override onto data-reduced-motion so CSS can honour it', () => {
+    // A media query cannot be overridden from JS. Without this attribute the
+    // settings toggle is inert on a machine whose OS asks for reduced motion.
+    setReducedMotionOverride('on');
+    expect(document.documentElement.getAttribute('data-reduced-motion')).toBe('on');
+    expect(document.body.getAttribute('data-reduced-motion')).toBe('on');
+
+    setReducedMotionOverride('off');
+    expect(document.documentElement.getAttribute('data-reduced-motion')).toBe('off');
+    expect(document.body.getAttribute('data-reduced-motion')).toBe('off');
+
+    // 'auto' hands control back to the media query.
+    setReducedMotionOverride('auto');
+    expect(document.documentElement.hasAttribute('data-reduced-motion')).toBe(false);
+    expect(document.body.hasAttribute('data-reduced-motion')).toBe(false);
+  });
+
+  it('applyTheme carries the reduced-motion attribute through a theme change', () => {
+    setReducedMotionOverride('on');
+    applyTheme('vintage');
+    expect(document.body.getAttribute('data-reduced-motion')).toBe('on');
+    expect(document.body.getAttribute('data-theme')).toBe('vintage');
   });
 
   it('falls back to the OS preference when no override is stored', () => {

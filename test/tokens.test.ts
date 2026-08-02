@@ -42,6 +42,25 @@ describe('tokens.css', () => {
     expect(css).toContain('--crt-flicker: 0');
     expect(css).toContain('--crt-scanlines: 0');
   });
+
+  it('suppresses motion on every themed element, not only :root', () => {
+    // theme.ts stamps data-theme on <html> AND <body>. <body> is not :root, so
+    // a :root-only reduced-motion block leaves the vintage scanline and flicker
+    // values standing on <body> — the element the overlay actually reads.
+    const css = readStyle('tokens.css');
+    const block = css.match(/@media \(prefers-reduced-motion: reduce\) \{\s*([^{]*)\{/);
+    expect(block, 'reduced-motion block exists').not.toBeNull();
+    expect(block![1], 'reduced-motion selector must cover [data-theme]').toContain('[data-theme]');
+
+    // Every token the vintage theme turns on must be turned back off here.
+    const vintage = css.match(/\[data-theme='vintage'\]\s*\{([^}]*)\}/s)![1];
+    const reduced = css.match(/@media \(prefers-reduced-motion: reduce\) \{.*?\{([^}]*)\}/s)![1];
+    for (const tok of ['--crt-flicker', '--crt-scanlines', '--scanline-stripe']) {
+      if (vintage.includes(tok)) {
+        expect(reduced, `${tok} enabled by vintage but not reset under reduced motion`).toContain(tok);
+      }
+    }
+  });
 });
 
 describe('no hardcoded colors outside tokens.css', () => {

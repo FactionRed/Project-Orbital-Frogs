@@ -32,9 +32,13 @@
   --crt-flicker: 0;
 
   /* Effect colors. Kept here (not in base.css) so tokens.css stays the single
-     place any color literal may appear. Default = invisible; vintage turns the
-     stripe on, reduced-motion turns it back off. */
-  --scanline-stripe: transparent;
+     place any color literal may appear.
+
+     The stripe is DERIVED from --crt-scanlines rather than set alongside it.
+     var() inside a custom property resolves per element, so every rule that
+     turns the flag off also blanks the stripe — one switch instead of two
+     that can drift apart. */
+  --scanline-stripe: rgba(0, 0, 0, calc(0.15 * var(--crt-scanlines)));
   --scrim: rgba(0, 0, 0, 0.6);
 
   /* Orbit-map marker colors. Theme-independent: the 3D scene is not themed, so
@@ -79,17 +83,35 @@
   --crt-scanlines: 1;
   --crt-bloom: 1;
   --crt-flicker: 1;
-  --scanline-stripe: rgba(0, 0, 0, 0.15);
 }
 
-/* Reduced motion: suppress ALL motion regardless of chosen theme. Same
-   specificity as the theme blocks above but later in source order, so these
-   win even when [data-theme='vintage'] is set. */
+/* Reduced motion: suppress ALL motion regardless of chosen theme.
+ *
+ * The selector must list [data-theme] as well as :root. theme.ts stamps
+ * data-theme on BOTH <html> and <body>, and <body> is not :root — so a
+ * :root-only block here leaves the vintage values standing on <body>, which is
+ * the element the scanline overlay (body[data-theme='vintage']::before)
+ * actually reads. Equal specificity to the theme blocks, later in source
+ * order, so these win on every element that carries the attribute. */
 @media (prefers-reduced-motion: reduce) {
-  :root {
+  :root, [data-theme] {
     --crt-flicker: 0;
     --crt-scanlines: 0;
     --t-scanline-drift: 0s;
-    --scanline-stripe: transparent;
   }
+}
+
+/* Explicit user override, stamped on <html>/<body> by theme.ts. It must come
+ * after the media query and win in BOTH directions: a media query cannot be
+ * overridden from JS, so without these rules the settings toggle is dead on a
+ * machine whose OS already asks for reduced motion. */
+[data-reduced-motion='on'] {
+  --crt-flicker: 0;
+  --crt-scanlines: 0;
+  --t-scanline-drift: 0s;
+}
+[data-theme='vintage'][data-reduced-motion='off'] {
+  --crt-flicker: 1;
+  --crt-scanlines: 1;
+  --t-scanline-drift: 8s;
 }

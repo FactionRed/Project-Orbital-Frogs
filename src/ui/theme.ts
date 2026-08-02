@@ -24,12 +24,28 @@ export function currentTheme(): Theme {
   return stored === 'vintage' ? 'vintage' : 'modern';
 }
 
+/**
+ * Mirror the stored reduced-motion override onto <html>/<body> as
+ * data-reduced-motion, so CSS can honour it. A media query cannot be
+ * overridden from JS; without this attribute the settings toggle would do
+ * nothing to the CRT effects on a machine whose OS already asks for reduced
+ * motion. 'auto' removes the attribute and lets the media query decide.
+ */
+function applyReducedMotionAttr(): void {
+  const override = localStorage.getItem(REDUCED_MOTION_OVERRIDE_KEY);
+  for (const el of [document.documentElement, document.body]) {
+    if (override === 'on' || override === 'off') el.setAttribute('data-reduced-motion', override);
+    else el.removeAttribute('data-reduced-motion');
+  }
+}
+
 /** Apply a theme to <html data-theme="..."> + <body data-theme="..."> (body for the ::before). */
 export function applyTheme(theme: Theme): void {
   const t: Theme = theme === 'vintage' ? 'vintage' : 'modern';
   document.documentElement.setAttribute('data-theme', t);
   document.body.setAttribute('data-theme', t);
   localStorage.setItem(STORAGE_KEY, t);
+  applyReducedMotionAttr();
 }
 
 /** Toggle between vintage and modern. Returns the new theme. */
@@ -43,6 +59,7 @@ export function toggleTheme(): Theme {
 export function setReducedMotionOverride(state: 'on' | 'off' | 'auto'): void {
   if (state === 'auto') localStorage.removeItem(REDUCED_MOTION_OVERRIDE_KEY);
   else localStorage.setItem(REDUCED_MOTION_OVERRIDE_KEY, state);
+  applyReducedMotionAttr();
 }
 
 /** Boot: read stored theme (default Modern), apply, listen for OS pref changes. */

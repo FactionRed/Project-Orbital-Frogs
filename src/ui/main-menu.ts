@@ -34,8 +34,9 @@ const FLY_CONTROLS: ReadonlyArray<readonly [string, string]> = [
 
 export class MainMenu {
   private root: HTMLElement;
+  private startBtn: HTMLButtonElement;
 
-  /** Opens the settings overlay. Wired in main.ts; stubbed until Step 8. */
+  /** Opens the settings overlay. Wired in main.ts. */
   onSettings: () => void = () => {};
 
   constructor(onStart: () => void) {
@@ -59,6 +60,7 @@ export class MainMenu {
     const startBtn = new DskyKey('ENTER', 'to VAB', onStart);
     startBtn.el.classList.add('menu-btn--primary');
     startBtn.el.id = 'menu-start';
+    this.startBtn = startBtn.el;
     const settingsBtn = new DskyKey('SETTINGS', 'theme, motion', () => this.onSettings());
     settingsBtn.el.classList.add('menu-btn--ghost');
     settingsBtn.el.id = 'menu-settings';
@@ -87,6 +89,9 @@ export class MainMenu {
 
   show(): void {
     this.root.style.display = 'flex';
+    // Land the caret on the primary action so the title screen is reachable
+    // with the keyboard alone — Tab then cycles ENTER → SETTINGS → QUIT.
+    this.startBtn.focus();
   }
 
   hide(): void {
