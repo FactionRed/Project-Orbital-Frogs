@@ -14,6 +14,7 @@ const BUILD_CONTROLS: ReadonlyArray<readonly [string, string]> = [
   ['WHEEL', 'zoom'],
   ['Q / E', 'rotate part'],
   ['DEL', 'remove part'],
+  ['ESC', 'cancel / pause'],
   ['H', 'toggle hints'],
 ];
 
@@ -27,6 +28,7 @@ const FLY_CONTROLS: ReadonlyArray<readonly [string, string]> = [
   ['F hold', 'override SAS'],
   ['CAPS', 'precision mode'],
   ['M', 'orbit map'],
+  ['ESC', 'pause / settings'],
   ['F1', 'revert to VAB'],
 ];
 

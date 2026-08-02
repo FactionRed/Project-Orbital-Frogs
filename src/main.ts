@@ -11,6 +11,7 @@ import './styles/screens/title.css';
 import './styles/screens/vab.css';
 import './styles/screens/flight-hud.css';
 import './styles/screens/orbit-map.css';
+import './styles/screens/settings.css';
 import { StateMachine } from './core/state-machine';
 import { Input } from './core/input';
 import { VabCamera } from './building/vab-camera';
@@ -29,6 +30,7 @@ import { StagingDisplay } from './ui/staging-display';
 import { installDebugInterface } from './dev/debug-interface';
 import { MenuScene } from './ui/menu-scene';
 import { MainMenu } from './ui/main-menu';
+import { SettingsOverlay } from './ui/settings-overlay';
 import type { ShipDesign } from './entities/ship';
 import { initAssets } from './assets';
 import { initTheme } from './ui/theme';
@@ -158,6 +160,7 @@ function revertToVab() {
   win.hide();
   flightPrompts.hide();
   stagingDisplay.hide();
+  settingsOverlay.hide(); // F1 can arrive while paused
   fsm.transition('BUILD');
 }
 
@@ -189,10 +192,96 @@ holdPanel.onSelect = (mode) => {
 };
 const win = new WinStates();
 win.onBuildAgain = () => revertToVab();
-input.onPressed('KeyM', () => orbitMap.toggle(renderer.domElement, flight ?? undefined));
+const settingsOverlay = new SettingsOverlay();
+settingsOverlay.onResume = () => resumeFromPause();
+settingsOverlay.onQuitToMenu = () => teardownToMenu();
+
+input.onPressed('KeyM', () => {
+  if (fsm.current === 'PAUSED') return; // physics is frozen; don't fight it
+  orbitMap.toggle(renderer.domElement, flight ?? undefined);
+});
 input.onPressed('F1', () => {
   if (fsm.current !== 'BUILD') revertToVab();
 });
+
+/**
+ * Esc is layered: it backs out of a sub-mode first (placement ghost, then the
+ * orbit map) and only opens the pause overlay once there is nothing left to
+ * cancel. Pressing it again from PAUSED resumes.
+ */
+input.onPressed('Escape', () => {
+  if (fsm.current === 'INIT') {
+    // On the title screen Esc just closes the settings overlay if it's open.
+    if (settingsOverlay.visible) settingsOverlay.hide();
+    return;
+  }
+  if (fsm.current === 'PAUSED') {
+    resumeFromPause();
+    return;
+  }
+  if (fsm.current === 'BUILD' && vab.isPlacing()) {
+    vab.cancelPlace();
+    return;
+  }
+  if (fsm.current === 'FLIGHT' && orbitMap.visible) {
+    orbitMap.toggle(renderer.domElement, flight ?? undefined);
+    return;
+  }
+  fsm.transition('PAUSED');
+  settingsOverlay.show();
+});
+
+/** Close the overlay and return to whichever screen opened it. */
+function resumeFromPause(): void {
+  if (fsm.current !== 'PAUSED') {
+    settingsOverlay.hide();
+    return;
+  }
+  settingsOverlay.hide();
+  fsm.transition(fsm.pausedFrom ?? 'BUILD');
+}
+
+/**
+ * QUIT TO MENU: end the current flight, put the VAB away, and go back to the
+ * title screen. The build itself survives, so re-entering the VAB shows the
+ * same vessel.
+ */
+function teardownToMenu(): void {
+  if (flight) {
+    scene.remove(flight.group);
+    scene.remove(flight.ship.group);
+    scene.remove(flight.planet.mesh);
+    if (flight.planet.atmosphere) scene.remove(flight.planet.atmosphere);
+    scene.remove(flight.moon.mesh);
+    if (flight.moon.atmosphere) scene.remove(flight.moon.atmosphere);
+    flight = null;
+    controls = null;
+  }
+  if (flightCam) {
+    flightCam.detach();
+    flightCam = null;
+  }
+  hud.hide();
+  navball.hide();
+  holdPanel.hide();
+  orbitMap.hide();
+  win.hide();
+  flightPrompts.hide();
+  stagingDisplay.hide();
+
+  // Put the VAB away and restore the camera the menu scene expects.
+  vabCam.reset();
+  vabCam.detach();
+  vab.cancelPlace();
+  vab.group.visible = false;
+  ui.hide();
+  hints.style.display = 'none';
+
+  menuScene.group.visible = true;
+  settingsOverlay.hide();
+  mainMenu.show();
+  fsm.transition('INIT');
+}
 
 input.onPressed('Delete', () => { if (fsm.current === 'BUILD') vab.deleteSelected(); });
 input.onPressed('KeyQ', () => { if (fsm.current === 'BUILD') vab.rotateSelected(-90); });
@@ -249,8 +338,8 @@ input.onPressed('KeyH', () => {
 // --- Main menu (created after all UI elements so it can hide/show them) ---
 const mainMenu = new MainMenu(() => enterVab());
 mainMenu.onSettings = () => {
-  // Step 8 replaces this with the real settings overlay.
-  console.log('[gui] settings — wired in Step 8');
+  // On the title screen there is no physics to pause — just show the panel.
+  settingsOverlay.show();
 };
 document.body.appendChild(mainMenu.element);
 
@@ -299,8 +388,11 @@ function animate() {
   //  - No huge jumps when tab is backgrounded (accumulator caps naturally)
   const now = performance.now();
   const frameDt = Math.min((now - lastFrameTime) / 1000, 0.1);
-  physicsAccumulator += frameDt;
   lastFrameTime = now;
+  // PAUSED skips the FLIGHT block below, so the world is already frozen. Don't
+  // bank real time into the accumulator while it is: those seconds would all
+  // be replayed in one burst the moment the player resumes.
+  if (fsm.current !== 'PAUSED') physicsAccumulator += frameDt;
 
   if (fsm.current === 'BUILD') ui.setDesign(vab.design);
   if (fsm.current === 'FLIGHT' && flight && controls && flightCam) {

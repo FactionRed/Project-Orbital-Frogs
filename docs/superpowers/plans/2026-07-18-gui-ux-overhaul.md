@@ -160,6 +160,29 @@ Recorded as each step lands, so the plan stays an accurate record.
   `moon-landed` test before the crash test runs, so `moon-landed` fires first. This behavior
   predates the overhaul, and it belongs to separate work.
 
+**Step 8**
+
+- *`PAUSED → INIT`:* the `ALLOWED` map in Step 8.1.3 omits it, so the QUIT path in Step 8.3.3
+  would throw. `MAP` also gains `BUILD`, `PAUSED` and `INIT`, because F1 and Esc both work
+  with the map open.
+- *`pausedFrom`:* the private field is `_pausedFrom`, as Step 8.1.3 notes. It clears on the
+  way out of `PAUSED`, so a stale value cannot leak into a later pause.
+- *Accumulator:* `main.ts` stops adding to `physicsAccumulator` while `PAUSED`. The `FLIGHT`
+  block already skips the physics step, but a paused minute would otherwise bank 60 seconds
+  and replay all of it in one burst on resume.
+- *Quit confirm:* an inline YES/NO strip inside the panel. Step 8.2.1 appends raw buttons to a
+  `Banner`, whose auto-hide timer would take the confirm away while the player reads it.
+- *Quit keeps the build.* Only the flight ends. Re-entering the VAB shows the same vessel, so
+  the prompt says "End this flight", not "Discard".
+- *Debug API:* `__game.fsm()` is new. `state()` prints the flight snapshot whenever a vessel
+  exists, so it cannot tell `FLIGHT` from `PAUSED`, which made the pause path untestable from
+  the console.
+- *Controls card:* the `ESC` rows moved from Step 3 to here, now that the handler exists.
+- *Live check:* Esc cancels a placement ghost first, then closes the orbit map, and only then
+  pauses. A second Esc resumes. The theme toggle flips `data-theme` live. QUIT asks, NO backs
+  out, YES returns to INIT with every flight and VAB panel hidden. Re-entering the VAB keeps
+  all 3 parts.
+
 ---
 
 ## File Structure
@@ -2538,7 +2561,7 @@ Spec §6.1"
 
 ### Task 8.1: Extend the FSM (TDD)
 
-- [ ] **Step 8.1.1: Write the failing test `test/pause.test.ts`**
+- [x] **Step 8.1.1: Write the failing test `test/pause.test.ts`**
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2599,12 +2622,12 @@ describe('StateMachine PAUSED + return-to-menu', () => {
 });
 ```
 
-- [ ] **Step 8.1.2: Run the test to verify it fails**
+- [x] **Step 8.1.2: Run the test to verify it fails**
 
 Run: `npx vitest run test/pause.test.ts`
 Expected: FAIL — `PAUSED` not in the `GameState` type; transitions throw or no-op wrong.
 
-- [ ] **Step 8.1.3: Modify `src/core/state-machine.ts`**
+- [x] **Step 8.1.3: Modify `src/core/state-machine.ts`**
 
 ```ts
 // src/core/state-machine.ts
@@ -2652,14 +2675,14 @@ export class StateMachine {
 
 **Note:** there's a private field `pausedFrom` and a public getter with the same name — TS disallows this. Rename the field to `_pausedFrom` and have the getter return it.
 
-- [ ] **Step 8.1.4: Run the test to verify it passes**
+- [x] **Step 8.1.4: Run the test to verify it passes**
 
 Run: `npx vitest run test/pause.test.ts`
 Expected: 7 PASS.
 
 ### Task 8.2: Create the SettingsOverlay class
 
-- [ ] **Step 8.2.1: Create `src/ui/settings-overlay.ts`**
+- [x] **Step 8.2.1: Create `src/ui/settings-overlay.ts`**
 
 ```ts
 // src/ui/settings-overlay.ts
@@ -2743,7 +2766,7 @@ export class SettingsOverlay {
 
 ### Task 8.3: Wire Esc + physics gate + teardown in main.ts
 
-- [ ] **Step 8.3.1: Modify `src/main.ts`**
+- [x] **Step 8.3.1: Modify `src/main.ts`**
 
 Add an `Escape` handler. First handle sub-mode cancellation (placement ghost / map open), then overlay toggle:
 
@@ -2780,7 +2803,7 @@ input.onPressed('Escape', () => {
 
 **Executor note:** `vab.isPlacing()` and `vab.cancelPlace()` — check whether the existing `VabController` exposes them. The review noted `cancelPlace` is unreachable; if `isPlacing()` doesn't exist, add it (returns the ghost-active flag) and add `cancelPlace()` as a public method. Read `vab-controller.ts` first.
 
-- [ ] **Step 8.3.2: Gate the physics step in the animate loop**
+- [x] **Step 8.3.2: Gate the physics step in the animate loop**
 
 In `main.ts` `animate()` (around L269-318), wrap the physics + flight HUD update in a PAUSED check:
 
@@ -2792,7 +2815,7 @@ if (fsm.current !== 'PAUSED') {
 // Always render (so the dimmed backdrop + overlay show).
 ```
 
-- [ ] **Step 8.3.3: Add `teardownToMenu()` helper in main.ts**
+- [x] **Step 8.3.3: Add `teardownToMenu()` helper in main.ts**
 
 ```ts
 function teardownToMenu(): void {
@@ -2818,7 +2841,7 @@ function teardownToMenu(): void {
 
 ### Task 8.4: settings-overlay CSS
 
-- [ ] **Step 8.4.1: Add to `src/styles/base.css` (or a new `src/styles/screens/settings.css` linked from index.html)**
+- [x] **Step 8.4.1: Add to `src/styles/base.css` (or a new `src/styles/screens/settings.css` linked from index.html)**
 
 ```css
 #settings-overlay {
@@ -2842,7 +2865,7 @@ function teardownToMenu(): void {
 
 ### Task 8.5: Wire onSettings from title menu to open the overlay (Step 3 stub completion)
 
-- [ ] **Step 8.5.1: In main.ts, replace the Step 3 stub**
+- [x] **Step 8.5.1: In main.ts, replace the Step 3 stub**
 
 ```ts
 mainMenu.onSettings = () => {
@@ -2855,7 +2878,7 @@ mainMenu.onSettings = () => {
 
 ### Task 8.6: Verify + commit
 
-- [ ] **Step 8.6.1: Verify live**
+- [x] **Step 8.6.1: Verify live**
 
 - Title → SETTINGS → overlay opens with toggles. Close works.
 - Enter VAB → place a part, hover placement (ghost active) → Esc cancels placement (ghost gone). Esc again → overlay.
@@ -2863,7 +2886,7 @@ mainMenu.onSettings = () => {
 - Toggle CRT FX in overlay → palette flips live.
 - Tab through overlay buttons; Enter activates.
 
-- [ ] **Step 8.6.2: Run tests + typecheck + commit**
+- [x] **Step 8.6.2: Run tests + typecheck + commit**
 
 ```bash
 npx tsc --noEmit && npx vitest run
