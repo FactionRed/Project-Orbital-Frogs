@@ -244,6 +244,10 @@ input.onPressed('KeyH', () => {
 
 // --- Main menu (created after all UI elements so it can hide/show them) ---
 const mainMenu = new MainMenu(() => enterVab());
+mainMenu.onSettings = () => {
+  // Step 8 replaces this with the real settings overlay.
+  console.log('[gui] settings — wired in Step 8');
+};
 document.body.appendChild(mainMenu.element);
 
 enterVab = () => {

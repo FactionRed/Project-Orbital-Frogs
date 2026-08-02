@@ -1,6 +1,11 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import electron from 'vite-plugin-electron/simple';
+import { createRequire } from 'node:module';
+
+// Version stencil on the title screen. Read from package.json so the displayed
+// release can't drift from the published one.
+const { version } = createRequire(import.meta.url)('./package.json') as { version: string };
 
 // Skip the Electron plugin when running tests — it alters module resolution in
 // ways that break vitest's worker, and tests don't touch the main process anyway.
@@ -40,6 +45,10 @@ export default defineConfig({
           // the dev server on Windows (illegal '?' in cache filenames).
         }),
       ],
+  define: {
+    __BUILD_SHA__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 7) ?? 'dev'),
+    __APP_VERSION__: JSON.stringify(version),
+  },
   server: { open: false }, // Electron opens its own window; avoid the browser tab too
   test: {
     globals: true,

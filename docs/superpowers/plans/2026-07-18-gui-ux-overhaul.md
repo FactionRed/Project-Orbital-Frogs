@@ -54,6 +54,26 @@ Recorded as each step lands, so the plan stays an accurate record.
   the theme. Sample the border of a `.dsky-key` more than 80 ms after the change. Its
   `transition` property makes an immediate read give the previous color.
 
+**Step 3**
+
+- *MainMenu API:* the class keeps its `constructor(onStart)` and its `element` getter. Step
+  3.2.1 replaces both, which would break the `new MainMenu(...)` call in `main.ts`. The class
+  gains one public field, `onSettings`. The QUIT key keeps its `window.close()` behavior.
+- *title.css specificity:* every rule has a `#main-menu` prefix. The legacy monolith styles
+  `.menu-title`, `.menu-subtitle`, `.menu-btn--primary` and `.menu-version` at id-plus-class
+  specificity. A bare class selector cannot win against those, whatever the load order. Step 9
+  deletes `styles.css` and makes the prefix only descriptive.
+- *Controls card:* it lists the bindings that exist today. Step 3.2.1 lists `L` for launch and
+  `ESC` for the menu, and the code has neither. Step 8 adds the `ESC` row with the handler.
+  The card also gives `F hold` and `CAPS`, which the plan omits.
+- *Version stencil:* `__APP_VERSION__` is a second Vite `define`, read from `package.json`.
+  A hard-coded `REL 0.4.0` drifts from the release as soon as the version changes.
+- *Short viewports:* the two cards are taller than a 640 px viewport. `body` has
+  `overflow: hidden`, so the browser cuts off both ends and the player cannot scroll to
+  them. A `max-height: 760px` block
+  gives a compact layout. The single-column breakpoint moved from 700 px to 520 px, because
+  one column makes the controls card twice as tall. Verified at 700x640 and 900x640.
+
 ---
 
 ## File Structure
@@ -1298,7 +1318,7 @@ Spec §4"
 
 ### Task 3.1: Wire the build SHA into Vite
 
-- [ ] **Step 3.1.1: Modify `vite.config.ts` — add `define`**
+- [x] **Step 3.1.1: Modify `vite.config.ts` — add `define`**
 
 In `vite.config.ts`, add inside `defineConfig({...})`:
 ```ts
@@ -1313,7 +1333,7 @@ declare const __BUILD_SHA__: string;
 
 ### Task 3.2: Restyle main-menu.ts to use components + add controls card
 
-- [ ] **Step 3.2.1: Rewrite `src/ui/main-menu.ts`**
+- [x] **Step 3.2.1: Rewrite `src/ui/main-menu.ts`**
 
 Replace the existing class body's DOM construction with component-based construction. Keep the `onStart`/`onQuit` callback contract and the `.show()/.hide()` API identical so `main.ts` doesn't change.
 
@@ -1412,7 +1432,7 @@ function controlsTableHTML(): string {
 
 ### Task 3.3: Write the title screen CSS
 
-- [ ] **Step 3.3.1: Fill `src/styles/screens/title.css`**
+- [x] **Step 3.3.1: Fill `src/styles/screens/title.css`**
 
 ```css
 /* src/styles/screens/title.css */
@@ -1477,7 +1497,7 @@ function controlsTableHTML(): string {
 
 ### Task 3.4: Wire onSettings in main.ts (placeholder — full overlay in Step 8)
 
-- [ ] **Step 3.4.1: Modify `src/main.ts` — give MainMenu an onSettings that opens a toast for now**
+- [x] **Step 3.4.1: Modify `src/main.ts` — give MainMenu an onSettings that opens a toast for now**
 
 Find where `MainMenu` is constructed (~L230) and add:
 ```ts
@@ -1490,7 +1510,7 @@ mainMenu.onSettings = () => {
 
 ### Task 3.5: Manual verification + commit
 
-- [ ] **Step 3.5.1: Verify live**
+- [x] **Step 3.5.1: Verify live**
 
 Boot dev server, navigate to title. Confirm:
 - Title in VT323 amber with glow.
@@ -1500,7 +1520,7 @@ Boot dev server, navigate to title. Confirm:
 - Tab through the three buttons with keyboard; Enter activates.
 - Toggle vintage in devtools (`document.documentElement.setAttribute('data-theme','vintage')`) — palette flips, scanlines appear.
 
-- [ ] **Step 3.5.2: Commit**
+- [x] **Step 3.5.2: Commit**
 
 ```bash
 git add src/ui/main-menu.ts src/styles/screens/title.css src/main.ts vite.config.ts src/global.d.ts
