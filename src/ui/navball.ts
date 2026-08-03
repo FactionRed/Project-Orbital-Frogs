@@ -1,36 +1,50 @@
 // src/ui/navball.ts
 import * as THREE from 'three';
 import type { FlightController } from '../flight/flight-controller';
+import { navballOrientation } from './navball-orientation';
+import { Panel } from './components';
 
 /**
  * KSP-style navball HUD instrument.
  *
- * Uses a quaternion-based approach to avoid Euler angle gimbal lock.
- * The ball's orientation is computed as a single quaternion transform
- * from the local reference frame (up/north/east) to the ship's frame.
- * Markers are projected by transforming world directions into the
- * ship's local frame and reading off the x/y components.
+ * All orientation math (pitch / heading / roll / marker projection) is
+ * delegated to `navballOrientation`, which derives the ball frame from the
+ * ship quaternion and the local up/east/north axes WITHOUT decomposing into
+ * Euler angles. This avoids the singularities the previous in-place version
+ * suffered at vertical attitudes (roll died on the launch pad; pitch clamped
+ * at ~±52°; a pure pitch maneuver spuriously reported roll=180°).
  *
  * Rendered on a fixed 160px canvas anchored bottom-center of the screen.
  */
 export class NavBall {
   private canvas: HTMLCanvasElement;
+  private bezel: HTMLElement;
   private ctx: CanvasRenderingContext2D;
   private readonly size = 160;
-  // Stored previous orientation state for smoothing/degenerate fallback.
-  private hasPrev = false;
+  // Last reported heading, carried over near the poles where the nose's
+  // horizon projection collapses (navball-orientation falls back to 0 there).
+  private prevHeadingDeg = 0;
 
   constructor() {
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'navball';
     this.canvas.width = this.size;
     this.canvas.height = this.size;
-    document.body.appendChild(this.canvas);
+    this.canvas.setAttribute('role', 'img');
+    this.canvas.setAttribute('aria-label', 'Attitude indicator');
+
+    // The instrument sits in a labelled bezel, like the rest of the panel set.
+    // The bezel owns the screen position; the canvas is static inside it.
+    this.bezel = new Panel('ATTITUDE').el;
+    this.bezel.id = 'navball-bezel';
+    this.bezel.appendChild(this.canvas);
+    document.body.appendChild(this.bezel);
+
     this.ctx = this.canvas.getContext('2d')!;
   }
 
-  show(): void { this.canvas.style.display = 'block'; }
-  hide(): void { this.canvas.style.display = 'none'; }
+  show(): void { this.bezel.style.display = 'block'; }
+  hide(): void { this.bezel.style.display = 'none'; }
 
   update(flight: FlightController): void {
     const ctx = this.ctx;
@@ -65,58 +79,22 @@ export class NavBall {
       root.quaternion.z, root.quaternion.w,
     );
 
-    // Ship's local axes in world space.
-    const nose = new THREE.Vector3(0, 1, 0).applyQuaternion(qShip).normalize();
-    const shipRight = new THREE.Vector3(1, 0, 0).applyQuaternion(qShip).normalize();
-    const shipForward = new THREE.Vector3(0, 0, 1).applyQuaternion(qShip).normalize();
-
-    // The navball is viewed from behind the ship. A world direction `dir`
-    // projects onto the 2D ball as:
-    //   screenX = dir · shipRight   (right = +x on screen)
-    //   screenY = -(dir · shipForward)  (up on screen = -z in ship frame,
-    //                                    because canvas y is down)
-    // Hidden if dir · nose < 0 (behind the ship).
-    const project = (dir: THREE.Vector3): { x: number; y: number } | null => {
-      const cosAngle = dir.dot(nose);
-      if (cosAngle < -0.05) return null; // behind the ship (small tolerance)
-      const px = dir.dot(shipRight) * R * 0.85;
-      const py = -dir.dot(shipForward) * R * 0.85;
-      return { x: THREE.MathUtils.clamp(px, -R, R),
-               y: THREE.MathUtils.clamp(py, -R, R) };
-    };
-
-    // --- Compute pitch and heading for readouts ---
-    // pitch = angle of nose above local horizon.
-    const pitchRad = Math.asin(THREE.MathUtils.clamp(nose.dot(up3), -1, 1));
-    // heading = direction of nose's horizontal projection.
-    const horizNose = nose.clone().sub(up3.clone().multiplyScalar(nose.dot(up3)));
-    let headingRad = 0;
-    if (horizNose.length() > 1e-5) {
-      horizNose.normalize();
-      headingRad = Math.atan2(horizNose.dot(east), horizNose.dot(north));
-    } else if (this.hasPrev) {
-      // Preserve previous heading near poles.
-      // Extract from prevBallQuat — just use 0 as fallback.
-      headingRad = 0;
+    // Single source of truth for orientation: the singularity-free module.
+    const o = navballOrientation(qShip, up3, east, north, R);
+    const pitchRad = o.pitch;
+    // Carry the previous heading when the nose is too close to vertical for a
+    // stable horizon projection — keeps the rim letters from snapping. The
+    // horizon-projection length is |cos(pitch)| (the nose's component in the
+    // horizon plane).
+    let headingRad = o.heading;
+    const horizNoseLen = Math.abs(Math.cos(pitchRad));
+    if (horizNoseLen < 0.05) {
+      headingRad = THREE.MathUtils.degToRad(this.prevHeadingDeg);
+    } else {
+      this.prevHeadingDeg = THREE.MathUtils.radToDeg(headingRad);
     }
-
-    // --- Compute roll for horizon rotation ---
-    // Roll = angle of shipRight relative to the local horizon plane.
-    // Project shipRight onto the plane perpendicular to nose.
-    const rightInPlane = shipRight.clone().sub(
-      nose.clone().multiplyScalar(shipRight.dot(nose)));
-    // Project local up onto the same plane.
-    const upInPlane = up3.clone().sub(
-      nose.clone().multiplyScalar(up3.dot(nose)));
-    let rollRad = 0;
-    if (rightInPlane.length() > 1e-5 && upInPlane.length() > 1e-5) {
-      rightInPlane.normalize();
-      upInPlane.normalize();
-      const sideRef = new THREE.Vector3().crossVectors(nose, upInPlane).normalize();
-      rollRad = Math.atan2(rightInPlane.dot(sideRef), rightInPlane.dot(upInPlane));
-    }
-
-    this.hasPrev = true;
+    const rollRad = o.roll;
+    const project = o.project;
 
     // --- Draw navball disk ---
     ctx.save();
@@ -127,9 +105,11 @@ export class NavBall {
     ctx.translate(cx, cy);
     ctx.rotate(-rollRad);
 
-    // Horizon offset: pitch in pixels.
-    const pitchPx = THREE.MathUtils.clamp(
-      THREE.MathUtils.radToDeg(pitchRad) * 1.5, -R, R);
+    // Horizon offset: pitch in pixels. The previous version clamped here at
+    // ±R (≈±52°), tearing the horizon during vertical flight. We now let pitch
+    // travel the full range; the clip() above keeps the overflow tidy and the
+    // pitch-ladder loop below skips rungs that fall outside the disk.
+    const pitchPx = THREE.MathUtils.radToDeg(pitchRad) * 1.5;
 
     // Sky (above horizon)
     ctx.fillStyle = '#1a3a6a';

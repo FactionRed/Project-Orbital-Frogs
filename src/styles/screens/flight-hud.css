@@ -1,0 +1,188 @@
+/* src/styles/screens/flight-hud.css
+ * IDs are repeated from the legacy monolith on purpose — same specificity,
+ * later in the cascade, so these win until Step 9 deletes styles.css. */
+
+#hud {
+  position: fixed; top: var(--sp-3); right: var(--sp-3); z-index: 20;
+  display: none; /* shown on launch */
+  pointer-events: none;
+  min-width: 210px;
+  /* Reset the legacy chrome — the .panel inside now carries it. */
+  background: none; border: none; padding: 0; backdrop-filter: none;
+  color: var(--ink); font-family: var(--font-body); font-size: var(--fs-body);
+}
+#hud .panel { display: flex; flex-direction: column; gap: var(--sp-1); }
+.hud-gauge-row { display: flex; align-items: center; gap: var(--sp-2); }
+.hud-gauge-row .gauge { flex: 1; display: flex; align-items: center; gap: var(--sp-2); }
+.hud-gauge-row .gauge__svg { flex: 1; }
+.hud-gauge-row .gauge__value { min-width: 6.5rem; text-align: right; }
+
+/* Word-valued readouts (SOI, SAS) drop to body size so the panel keeps its width. */
+.readout--compact .readout__value { font-family: var(--font-body); font-size: var(--fs-body); }
+
+/* Anchored by its RIGHT edge just left of the navball bezel (90px half-width
+ * + a 10px gap), so the panel grows leftward and can never overlap the ball.
+ * The legacy `left:50%; transform:translateX(-50%); margin-right:220px` did not
+ * shift it at all — margin-right does nothing to a centered fixed box, so the
+ * keys sat directly on top of the navball. */
+#hold-panel {
+  position: fixed; bottom: var(--sp-3);
+  right: calc(50% + 100px); left: auto;
+  transform: none; margin-right: 0;
+  display: none; gap: var(--sp-1);
+  z-index: 20;
+  /* Reset legacy chrome; the keys carry their own. */
+  background: none; border: none; padding: 0; backdrop-filter: none;
+}
+#hold-panel .dsky-key { min-width: 3.6rem; padding: var(--sp-1) var(--sp-2); }
+#hold-panel .dsky-key__word { font-size: var(--fs-label); }
+#hold-panel .dsky-key__hint { font-size: 9px; }
+
+/* Navball bezel — owns the screen position; #navball is static inside it. */
+#navball-bezel {
+  position: fixed; bottom: var(--sp-3); left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  display: none; /* shown on launch */
+  padding: var(--sp-2);
+  line-height: 0; /* no descender gap under the canvas */
+}
+#navball {
+  position: static; transform: none;
+  display: block;
+  background: var(--phosphor-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 50%;
+}
+
+#staging-panel {
+  position: fixed; left: var(--sp-3); top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: none; /* shown on launch */
+  pointer-events: none;
+  min-width: 130px;
+}
+.stage-list { display: flex; flex-direction: column; gap: var(--sp-1); }
+.stage-slot {
+  pointer-events: none;
+  cursor: default;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-2);
+}
+.stage-slot .dsky-key__word { font-size: var(--fs-label); }
+.stage-slot .dsky-key__hint { font-size: 10px; }
+
+/* Prompts render as toasts inside one stack; the legacy pulse animation and
+ * kbd chrome are gone. The width cap keeps the stack clear of the telemetry
+ * panel on the right — without it the ignite prompt runs under the HUD
+ * around 900px. */
+#toast-stack {
+  position: fixed; top: var(--sp-4); left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
+  max-width: max(240px, min(60ch, calc(100vw - 640px)));
+  pointer-events: none;
+}
+#toast-stack .toast {
+  position: static; transform: none;
+  text-align: center;
+  animation: none;
+}
+
+/* Too narrow to sit beside the HUD at all — drop the stack below it. */
+@media (max-width: 700px) {
+  #toast-stack { top: calc(var(--sp-4) + 260px); }
+}
+
+/* In-game key reference, toggled with H. The title screen carries the same
+   reference in its FLIGHT PROCEDURES card, so this one starts hidden and is
+   opt-in — there is no room for it beside the instruments below ~1100px. */
+#hints {
+  /* Above the instruments (z 20): when the player summons it on a small screen
+     it has to sit on top of them, not interleave. */
+  position: fixed; bottom: var(--sp-3); right: var(--sp-3); z-index: 60;
+  max-width: 300px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  backdrop-filter: blur(4px);
+  color: var(--ink-dim);
+  font-family: var(--font-body); font-size: var(--fs-label);
+  line-height: 1.5; text-align: right;
+  pointer-events: none;
+}
+#hints h3 {
+  font-size: var(--fs-label); color: var(--amber);
+  letter-spacing: var(--tracking-mono); margin-top: var(--sp-2);
+}
+#hints h3:first-child { margin-top: 0; }
+
+/* Precision-mode lamp, lit while CapsLock precision steering is on. It sits
+   inside the telemetry panel: at 900px every screen corner is already taken. */
+#precision-indicator {
+  margin-top: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--cyan);
+  border-radius: var(--r-key);
+  color: var(--cyan);
+  font-family: var(--font-body); font-size: var(--fs-label);
+  letter-spacing: var(--tracking-mono);
+  text-align: center;
+}
+
+/* Mission-event banner. The id repeats the legacy selector because the legacy
+   green slab out-specifies the .banner component class. */
+#win-banner {
+  position: fixed; top: 30%; left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  text-align: center;
+  pointer-events: auto;
+  max-width: min(90vw, 40rem);
+}
+#win-banner[data-tone='success'] { border-color: var(--green); }
+#win-banner[data-tone='info']    { border-color: var(--cyan); }
+#win-banner[data-tone='alarm']   { border-color: var(--red); }
+#win-banner #banner-btn {
+  margin-top: var(--sp-3);
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-key);
+  color: var(--ink);
+  padding: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+#win-banner #banner-btn:hover { border-color: var(--amber); background: transparent; color: var(--ink); }
+
+/* Below ~1100px there is no room beside the navball, so the keys move above it
+ * and re-center. */
+@media (max-width: 1100px) {
+  #hold-panel {
+    right: auto; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--sp-3) + 190px);
+    flex-wrap: wrap; justify-content: center; max-width: 92vw;
+  }
+}
+@media (max-width: 900px) {
+  #hud { min-width: 170px; }
+  #hud .readout__value { font-size: 24px; }
+  #staging-panel { top: auto; bottom: var(--sp-3); transform: none; }
+}
+
+/* Once the hold keys move above the navball there is nothing free in the
+   bottom-right, so the opt-in hints panel sits over the 3D view instead. */
+@media (max-width: 1100px) {
+  #hints { bottom: auto; top: 50%; transform: translateY(-50%); max-width: 260px; }
+}

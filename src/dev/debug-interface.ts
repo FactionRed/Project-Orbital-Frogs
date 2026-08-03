@@ -37,6 +37,12 @@ export interface DebugDeps {
 export function installDebugInterface(deps: DebugDeps): void {
   const api = {
     // --- State query ---
+    /** The FSM state on its own. state() reports the flight snapshot whenever
+     *  a vessel exists, so it cannot tell FLIGHT from PAUSED. */
+    fsm(): string {
+      return deps.fsm.current;
+    },
+
     state(): string {
       const f = deps.flight();
       if (deps.fsm.current === 'BUILD') {
@@ -211,7 +217,7 @@ export function installDebugInterface(deps: DebugDeps): void {
 
     help(): string {
       return [
-        'Methods: state() snapshot() build() clear() place(id) launch()',
+        'Methods: fsm() state() snapshot() build() clear() place(id) launch()',
         'stage() throttle(0..1) sas() map() zoom(±n) revert()',
         'dragRight(dx,dy) dragLeft(dx,dy)',
         'Parts: pod tank engine winglet strut',

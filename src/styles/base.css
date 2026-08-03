@@ -1,0 +1,44 @@
+/* src/styles/base.css — reset, base element styles, CRT scanline overlay. */
+* { margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; }
+body {
+  background: var(--phosphor-bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  letter-spacing: var(--tracking-mono);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+#app { overflow: hidden; }
+canvas { display: block; }
+
+/* CRT scanline overlay — only when vintage theme is active. The stripe color
+   itself is a token: transparent by default and under reduced-motion, opaque
+   only for vintage (see tokens.css). */
+body[data-theme='vintage']::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    var(--scanline-stripe) 3px,
+    var(--scanline-stripe) 4px
+  );
+  animation: scanline-drift var(--t-scanline-drift) linear infinite;
+}
+@keyframes scanline-drift {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(4px); }
+}
+
+/* Focus ring — accessibility (Critical a11y gap from review). */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
