@@ -5,10 +5,12 @@ document:   Game Design Document (GDD)
 project:    Project Orbital Frogs
 repository: FactionRed/Project-Orbital-Frogs
 game_version: 0.4.0
-doc_version:  0.1.0 (initial draft)
+doc_version:  0.2.0
 doc_status:   as-built specification + stubbed vision
-last_verified_against: 0dc1f52
+last_verified_against: 27d2114
 ```
+
+> **Related documents.** `docs/superpowers/specs/2026-07-18-gui-ux-overhaul-design.md` is the visual design spec for the interface; `docs/superpowers/plans/2026-07-18-gui-ux-overhaul.md` is the implementation plan it was built from. This GDD covers what the game *is*; those cover what the interface *looks like*.
 
 ---
 
@@ -68,10 +70,10 @@ Project Orbital Frogs is a miniature Kerbal Space Program. It keeps the parts th
 | Platform | Browser (Vite dev server) and Windows desktop (Electron, portable `.exe`) |
 | Session length | 2–10 minutes per launch attempt |
 | Content scale | 5 parts, 2 celestial bodies, 4 mission milestones |
-| Rendering | Fully procedural — no external art assets |
-| Source size | ~4,800 lines of TypeScript |
+| Rendering | Procedural geometry and shaders; three bundled webfonts |
+| Source size | ~6,000 lines of TypeScript + ~800 lines of CSS |
 
-**Why it exists in this shape.** Every asset is generated in code (`src/rendering/`), so the game has no art pipeline and no binary dependencies. The whole thing is a single static bundle. That is a deliberate constraint, not a placeholder — see [§2](#2-design-pillars).
+**Why it exists in this shape.** All geometry and shading is generated in code (`src/rendering/`), so the game has no art pipeline. The only binary assets in the repository are three `.woff2` webfonts under `public/fonts/`, added by the interface overhaul. The whole thing is still a single static bundle — see [§2](#2-design-pillars).
 
 ---
 
@@ -106,6 +108,10 @@ Five parts. Two bodies. Four milestones. A player can enumerate the entire conte
 ### 2.4 Procedural everything
 
 No textures, no models, no audio files. Parts are voxel meshes built in code (`src/rendering/voxel-model.ts`); planets are noise-displaced spheres with shader-based biomes and a day/night terminator (`src/rendering/procedural-planet.ts`). The asset loader (`src/assets.ts`) exists but currently has nothing to load.
+
+**This pillar has one exception.** The interface overhaul added three webfonts (`public/fonts/` — VT323 and IBM Plex Mono) to carry the vintage-terminal look. They are the first non-procedural assets in the project.
+
+❓ **Open question:** is the pillar "no external assets" or "no external *art* assets"? The answer decides whether audio is admissible later. See [§14.2](#142-candidate-features).
 
 ### 2.5 The build is the difficulty curve
 
@@ -164,19 +170,38 @@ stateDiagram-v2
     [*] --> INIT
     INIT --> BUILD: Enter VAB button
     BUILD --> FLIGHT: Launch, requires pod + engine
-    FLIGHT --> BUILD: F1 revert or Build Again
+    FLIGHT --> BUILD: F1 revert or BUILD AGAIN
+    BUILD --> PAUSED: Esc
+    FLIGHT --> PAUSED: Esc
+    PAUSED --> BUILD: Esc or RESUME
+    PAUSED --> FLIGHT: Esc or RESUME
+    PAUSED --> INIT: QUIT TO MENU
     state "MAP (declared, never entered)" as MAP
     FLIGHT --> MAP: M key, overlay only, no state transition
 ```
 
 | State | What renders | Camera |
 | --- | --- | --- |
-| `INIT` | 3D crash-site scene on Luna's equator + main menu overlay | `MenuScene` — slow auto-orbit |
+| `INIT` | 3D crash-site scene on Luna's equator + title menu | `MenuScene` — slow auto-orbit |
 | `BUILD` | VAB grid, placed parts, part palette, hints | `VabCamera` — right-drag orbit, wheel zoom |
 | `FLIGHT` | Planet, moon, ship, full flight HUD | `FlightCamera` — position-follow, world-up |
+| `PAUSED` | Settings overlay over the frozen screen beneath | *(frozen)* |
 | `MAP` | *(declared in the type but never transitioned to)* | Orbit map borrows the VAB camera object |
 
-**Note:** the map is an overlay toggled by `orbitMap.toggle()`; `fsm.transition('MAP')` is never called. The `MAP` member of `GameState` is currently dead. See [§13](#13-known-gaps-and-inconsistencies).
+**Transitions are validated.** `StateMachine` holds an `ALLOWED` table and **throws** on any path not in it, so a wrong transition surfaces as a loud failure rather than a screen silently stuck in the wrong mode. `pausedFrom` remembers which screen opened the pause overlay so RESUME returns to it.
+
+**Pause really freezes.** While in `PAUSED` the physics step is skipped, and `M` is ignored so the map can't fight a frozen simulation.
+
+**Esc is layered** (`src/main.ts`) — it backs out of the innermost thing first:
+
+```
+INIT      → close settings overlay if open, else nothing
+PAUSED    → resume
+BUILD     → cancel the placement ghost if one is held, else pause
+FLIGHT    → close the orbit map if open, else pause
+```
+
+**The map is still an overlay.** `orbitMap.toggle()` shows it; `fsm.transition('MAP')` is never called from anywhere. The `MAP` member of `GameState` remains dead despite now appearing in the `ALLOWED` table. See [§13](#13-known-gaps-and-inconsistencies).
 
 ---
 
@@ -218,12 +243,14 @@ Unoccupied nodes render as small spheres while dragging: **green** = compatible 
 
 ### 5.3 Launch validity
 
-`canLaunch()` (`src/entities/ship.ts`) requires exactly two things:
+`launchReadiness()` (`src/entities/ship.ts`) requires exactly two things:
 
 - at least one `pod`
 - at least one `engine`
 
 That's it. A pod and an engine with no fuel tank is a legal, launchable, completely useless rocket. Structural soundness, TWR, and delta-v are never checked — the player finds out on the pad.
+
+When the design isn't ready, `launchBlockerText()` returns the reason (`NEEDS COMMAND POD + ENGINE`) and the VAB shows it beside the disabled Launch control — *"a disabled control that doesn't say what it wants is a dead end for the player."*
 
 The **root part** is the first `pod` placed. Deleting a part re-parents its children to its own parent rather than orphaning them.
 
@@ -352,6 +379,15 @@ Jettisoned parts get a **2 m/s separation nudge** along the parent's local −Y,
 
 The 0.5 m tolerance prevents the clamp from interfering with liftoff.
 
+**Impact recording.** The clamp is also the only place an impact speed exists, so it records one just before zeroing the velocity:
+
+| Field | Meaning |
+| --- | --- |
+| `peakImpactSpeed` | Hardest terrain contact this flight, as inward radial speed (m/s). `-1` until first contact. |
+| `peakImpactBody` | `'planet'`, `'moon'`, or `null` |
+
+It is the **peak**, not the latest. The clamp zeroes inward velocity on contact, so the next physics step would record ~0 and erase the number that says whether the ship survived — and two physics steps can run between UI updates, losing the impact outright. This is what makes Terra crash detection work at all ([§9.1](#91-exact-conditions)).
+
 ---
 
 ## 7. The world — Terra and Luna
@@ -425,7 +461,8 @@ Shading is done in-shader: biome colouring by elevation, a day/night terminator 
 | `F` (hold) | Flight | Suppress SAS while held |
 | `CapsLock` | Flight | Toggle precision mode (½ torque) |
 | Left-drag | Flight, Map | Orbit camera |
-| `M` | Flight | Toggle orbit map |
+| `M` | Flight | Toggle orbit map (ignored while paused) |
+| `Esc` | Anywhere | Layered back-out, then pause — see [§4](#4-game-states-and-screens) |
 | `F1` | Flight | Revert to VAB |
 | `H` | Anywhere | Toggle hints overlay (persisted) |
 
@@ -437,23 +474,38 @@ Shading is done in-shader: biome colouring by elevation, a day/night terminator 
 | --- | --- |
 | `ALT` | Altitude above the dominant body's mean radius |
 | `VEL` | Speed (world frame — *not* relative to a rotating surface; the bodies don't rotate) |
-| `Ap/Pe` | Apoapsis / periapsis as altitudes, or `escape` when orbital energy ≥ 0 |
-| `FUEL` | Remaining fuel, whole ship |
-| `Q` | Dynamic pressure ½ρv². Turns red above 200. |
-| `SOI` | `Terra` or `Luna` |
-| `SAS` | `ON` (green) / `OFF` |
-| Throttle bar | Horizontal fill, top of panel |
+| `Ap` / `Pe` | Apoapsis / periapsis as altitudes, or `escape` when orbital energy ≥ 0 |
+| `Q` | Dynamic pressure ½ρv². Goes to the `alarm` state above `Q_ALARM = 200`. |
+| `SOI` | `TERRA` or `LUNA` |
+| `SAS` | `ON` / `OFF` |
+| `THR` gauge | Throttle, as a bar |
+| Fuel gauge | Remaining fuel, as a bar |
+| `PRECISION` lamp | Lit while precision mode is on |
 
 ### 8.3 Other instruments
 
 | Element | Source | Purpose |
 | --- | --- | --- |
-| **Navball** | `src/ui/navball.ts` | 160 px canvas, bottom-centre. Quaternion-based (no gimbal lock) attitude ball with prograde/retrograde markers. |
+| **Navball** | `src/ui/navball.ts` + `navball-orientation.ts` | 160 px canvas, bottom-centre. Orientation maths is a separate, singularity-free, unit-tested module. |
 | **Hold panel** | `src/ui/hold-panel.ts` | Attitude-hold buttons using KSP marker glyphs. Clicking the active mode disengages it. |
 | **Staging display** | `src/ui/staging-display.ts` | Left-side stage list, active stage highlighted, built once at launch. |
-| **Orbit map** | `src/ui/orbit-map.ts` | Player-centred 3D system view. Forward-integrates the trajectory 2,100 steps × 0.5 s = **1,050 s of lookahead**, with Ap/Pe markers on the line. |
+| **Orbit map** | `src/ui/orbit-map.ts` | Player-centred 3D system view. Forward-integrates the trajectory 2,100 steps × 0.5 s = **1,050 s of lookahead**, with Ap/Pe markers and body labels. |
 | **Flight prompts** | `src/ui/flight-prompts.ts` | "Press Space to ignite" until first thrust; "No fuel remaining — F1 to revert" when dry. |
-| **Win banner** | `src/ui/win-states.ts` | Milestone announcements. Auto-hides after 4 s except the terminal one. |
+| **Win banner** | `src/ui/win-states.ts` | Milestone announcements. Auto-hides after 4 s except terminal ones. |
+| **Settings overlay** | `src/ui/settings-overlay.ts` | Pause panel: theme, reduced motion, RESUME, QUIT TO MENU (which confirms first, since it discards the vessel). |
+
+### 8.4 Component library and theming
+
+The interface is built from a shared component library (`src/ui/components/`) rather than ad-hoc DOM per screen: `Panel`, `Readout`, `DskyKey`, `Toggle`, `Gauge`, `Banner`, `Toast`, `Tooltip`. Styling lives in `src/styles/` — design tokens, base, components, and one file per screen.
+
+`src/ui/theme.ts` persists two user preferences to `localStorage`:
+
+| Preference | Key | Values |
+| --- | --- | --- |
+| Theme | `orbital-theme` | `modern` (default) or `vintage` |
+| Reduced motion | `orbital-reduced-motion-override` | `on` / `off` / unset (follow the OS) |
+
+The reduced-motion override is mirrored onto `<html>`/`<body>` as `data-reduced-motion`, because a CSS media query cannot be overridden from JS — without the attribute, the toggle would do nothing on a machine whose OS already requests reduced motion.
 
 ---
 
@@ -465,14 +517,22 @@ Four events. Each fires **once per flight**; `WinStates` tracks an achieved-set 
 
 ### 9.1 Exact conditions
 
-| Event | Banner | Condition |
-| --- | --- | --- |
-| `orbit` | 🌱 Orbit Achieved! | Outside Luna's SOI **and** orbital energy < 0 **and** periapsis > Terra's radius |
-| `moon-landed` | 🌕 Lunar Landing! | Inside Luna's SOI **and** −10 ≤ altitude < 50 m **and** radial speed < 30 m/s |
-| `crash` | 💥 Crashed — Revert with F1 | Terra altitude < −10 m, **or** inside Luna's SOI with altitude < −10 m, **or** on Luna's surface with radial speed ≥ 30 m/s |
-| `safe-return` | 🏆 Mission Complete! | Was inside Luna's SOI, now isn't, Terra altitude < 100 m, speed < 50 m/s. **Terminal** — shows "Build Again". |
+| Event | Banner | Tone | Condition |
+| --- | --- | --- | --- |
+| `orbit` | 🌱 ORBIT ACHIEVED | success | Outside Luna's SOI **and** orbital energy < 0 **and** periapsis > Terra's radius |
+| `moon-landed` | 🌕 LUNAR LANDING | success | Inside Luna's SOI **and** −10 ≤ altitude < 50 m **and** radial speed < 30 m/s |
+| `crash` | ■ LITHOBRAKE | alarm | Any of the three crash conditions below. **Terminal** — a wreck must not scroll away while it's being read. Detail line reports the impact speed. |
+| `safe-return` | 🏆 MISSION COMPLETE | success | Was inside Luna's SOI, now isn't, Terra altitude < 100 m, speed < 50 m/s. **Terminal** — shows BUILD AGAIN. |
 
-Named thresholds (exported from `win-states.ts`):
+The three ways to crash:
+
+1. **Below Terra's surface** — altitude < −10 m.
+2. **Inside Luna, or hitting it hard** — inside Luna's SOI with altitude < −10 m, or on Luna's surface with radial speed ≥ 30 m/s.
+3. **Hard impact on Terra** — outside Luna's SOI with `peakImpactBody === 'planet'` and `peakImpactSpeed ≥ 30 m/s`.
+
+Condition 3 exists because condition 1 could never fire on Terra: `clampToTerrain` holds the ship *at* the surface, so `planetAlt` never goes below −10. The impact speed the clamp recorded on the way in is the only surviving evidence — see [§6.7](#67-ground-handling).
+
+Named thresholds (`src/flight/crash-detection.ts`, shared by Terra and Luna):
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
@@ -480,13 +540,15 @@ Named thresholds (exported from `win-states.ts`):
 | `SURFACE_CONTACT_ALT` | 50 m | Altitude below which the ship counts as at the surface |
 | `SURFACE_PENETRATION_TOLERANCE` | 10 m | How far below mean radius still counts as "on" the body |
 
+`isCrashImpact()` guards the threshold against NaN/Infinity and against the `-1` sentinel `peakImpactSpeed` carries before any contact, so a ship that has never touched down is never reported as wrecked.
+
 **"Vertical speed" means radial speed** — the component of velocity along the vector from the body's centre to the ship. Not world-Y. Luna orbits in the XZ plane, so its surface normal points in any direction.
 
 **Landing and crash are mutually exclusive by construction.** Both are derived from one set of moon-relative values sharing the same altitude floor. Altitude is measured from Luna's *centre*, so it goes negative inside the body — a wreck at rest under the surface must not read as a gentle touchdown. The floor is −10 m rather than 0 because Luna's terrain dips below its mean radius and a legitimate landing reads slightly negative.
 
 ### 9.2 Failure handling
 
-There is no death state. A crash shows a banner; the ship keeps simulating. Recovery is always `F1`, which rebuilds the flight scene from scratch and returns to the VAB with the design intact.
+There is no death state. A crash shows a terminal banner; the ship keeps simulating underneath it. Recovery is `F1` or the BUILD AGAIN key on the banner, either of which rebuilds the flight scene from scratch and returns to the VAB with the design intact.
 
 Running out of fuel is not a failure event — it's a prompt (`src/ui/flight-prompts.ts`).
 
@@ -506,7 +568,7 @@ Running out of fuel is not a failure event — it's a prompt (`src/ui/flight-pro
 src/
 ├── main.ts                  Composition root — owns the render loop and all wiring
 ├── core/
-│   ├── state-machine.ts     INIT / BUILD / FLIGHT / MAP
+│   ├── state-machine.ts     INIT / BUILD / FLIGHT / MAP / PAUSED, validated
 │   └── input.ts             Held-key set + one-shot press events
 ├── physics/
 │   ├── constants.ts         ★ All world tuning
@@ -523,11 +585,20 @@ src/
 │   ├── flight-controller.ts ★ The simulation — thrust, drag, staging, terrain
 │   ├── ship-builder.ts      Design → compound rigid bodies
 │   ├── stage-manager.ts     Part tree → stage list (tested)
+│   ├── crash-detection.ts   Shared crash thresholds + predicate (tested)
 │   ├── controls.ts          Input → throttle and torque
 │   ├── flight-camera.ts     Position-follow orbital camera
-│   └── hud.ts               Numeric readouts
-├── ui/                      navball, orbit-map, hold-panel, staging-display,
-│                            flight-prompts, win-states, main-menu, menu-scene
+│   └── hud.ts               Telemetry panel (tested)
+├── ui/
+│   ├── components/          Panel, Readout, DskyKey, Toggle, Gauge,
+│   │                        Banner, Toast, Tooltip (barrel: index.ts)
+│   ├── theme.ts             Theme + reduced-motion prefs (tested)
+│   ├── settings-overlay.ts  Pause panel
+│   ├── navball.ts           Canvas instrument
+│   ├── navball-orientation.ts  Singularity-free orientation maths (tested)
+│   └── orbit-map, hold-panel, staging-display, flight-prompts,
+│       win-states, main-menu, menu-scene
+├── styles/                  tokens, base, components, screens/*.css
 ├── rendering/               procedural-planet, voxel-model, part-models
 └── dev/debug-interface.ts   window.__game — see §11
 ```
@@ -560,17 +631,25 @@ Staging splits the compound: shapes move from the parent body to a new body, mas
 
 ### 10.4 Tests
 
-`vitest`, `environment: 'node'`, 25 tests across 5 files:
+`vitest`, **110 tests across 14 files**. The default environment is `node`; DOM-dependent suites opt in per file with a `// @vitest-environment jsdom` docblock. `test/setup-storage.ts` runs as a global setup file to patch a `localStorage` gap.
 
 | File | Covers |
 | --- | --- |
-| `test/orbit-math.test.ts` | Orbital energy, Ap/Pe, SOI formula |
-| `test/gravity.test.ts` | Force direction, 1/r² falloff, mass scaling, surface g = 10 |
-| `test/ship.test.ts` | Mass/fuel aggregation, launch validity |
-| `test/stage-manager.test.ts` | Stage derivation from part trees |
-| `test/win-states.test.ts` | Milestone thresholds, landing-vs-crash exclusivity |
+| `orbit-math.test.ts` | Orbital energy, Ap/Pe, SOI formula |
+| `gravity.test.ts` | Force direction, 1/r² falloff, mass scaling, surface g = 10 |
+| `ship.test.ts` | Mass/fuel aggregation, launch validity |
+| `stage-manager.test.ts` | Stage derivation from part trees |
+| `crash-detection.test.ts` | Threshold predicate, NaN and sentinel guards |
+| `win-states.test.ts` | Terra impact detection, milestone thresholds, landing-vs-crash exclusivity |
+| `hud.test.ts` | Readout formatting and alarm states |
+| `navball-orientation.test.ts` | Orientation maths through the singularities |
+| `vab-readiness.test.ts` | Launch blocker text |
+| `pause.test.ts` | Pause/resume transitions, illegal-transition throws |
+| `theme.test.ts` | Theme + reduced-motion persistence |
+| `tokens.test.ts` | Design token presence/consistency |
+| `gauge.test.ts`, `readout.test.ts` | Component behaviour |
 
-The rendering, VAB, and camera layers have **no automated coverage**. `win-states.test.ts` stubs the handful of DOM calls its constructor makes rather than pulling in jsdom — the same trick works for any other UI module.
+Still uncovered: the rendering layer, the VAB controller's snapping logic, and both cameras.
 
 ### 10.5 Build and distribution
 
@@ -582,6 +661,8 @@ The rendering, VAB, and camera layers have **no automated coverage**. `win-state
 | `npm run build:exe` | Windows portable `.exe` via electron-builder |
 
 The Electron plugin is **skipped when `VITEST` is set** — it rewrites module resolution in a way that breaks the vitest worker.
+
+Two build-time constants are injected via Vite `define`: `__APP_VERSION__` from `package.json`, and `__BUILD_SHA__` from `GITHUB_SHA` (falling back to `'dev'`). They're declared in `src/global.d.ts`.
 
 ---
 
@@ -595,6 +676,7 @@ This section is written for LLM agents working on this repository.
 
 | Call | Returns |
 | --- | --- |
+| `__game.fsm()` | The FSM state alone. Needed because `state()` reports a flight snapshot whenever a vessel exists and so cannot tell `FLIGHT` from `PAUSED`. |
 | `__game.state()` | One-line summary: `FLIGHT alt=… vel=… fuel=… throttle=… sas=… stage=… map=…` |
 | `__game.snapshot()` | Structured object — includes `soi`, `stageCount`, `mapOpen` |
 | `__game.build()` | Places a standard pod + tank + engine |
@@ -619,12 +701,14 @@ Prefer this over synthesising keyboard events. `__game.build()` + `__game.launch
 | Any world physics | `src/physics/constants.ts` | Δv table in [§5.5](#55-reference-designs); every derived figure in [§7](#7-the-world--terra-and-luna) |
 | Any part stat | `src/entities/parts-catalog.ts` | Δv table, TWR, burn times |
 | Fuel economy | `FUEL_BURN_RATE` in `flight-controller.ts` | Exhaust velocity → **all** Δv figures |
-| Milestone thresholds | Exported constants in `win-states.ts` | `test/win-states.test.ts` (it imports them) |
+| Crash / landing thresholds | `src/flight/crash-detection.ts` | `test/win-states.test.ts` and `test/crash-detection.test.ts` (both import them) |
+| Interface styling | `src/styles/tokens.css` then the screen file | `test/tokens.test.ts` |
 | Handling feel | `TORQUE_PER_TONNE`, `THROTTLE_RATE` in `controls.ts`; `HOLD_GAIN`/`HOLD_DAMP`/`SAS_GAIN` in `flight-controller.ts` | Nothing automated — fly it |
 
 ### 11.3 Invariants
 
 Each of these encodes a bug that was already fixed once. Breaking one reintroduces it.
+
 
 1. **`world.step(dt)` takes exactly one argument.** Sub-stepping drops custom gravity on all but the first sub-step and breaks symplectic integration. (`flight-controller.ts`)
 2. **Physics runs on a fixed 1/60 timestep.** Variable dt causes orbital energy drift. (`main.ts`)
@@ -632,9 +716,11 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 4. **The visual mesh and the collision clamp call the same `terrainRadiusAt`.** Two implementations will diverge and the ship will clip. (`procedural-planet.ts`)
 5. **First `Space` press activates; it does not jettison.** Otherwise igniting on the pad drops the engine. (`flight-controller.ts`)
 6. **Landing and crash tests share one altitude floor.** They must stay mutually exclusive — a ship at rest inside Luna once reported a landing *and* a crash in the same frame. (`win-states.ts`)
-7. **The ship is one compound body.** A constraint network explodes under jitter. (`ship-builder.ts`)
-8. **Shader attribute names must not collide with Three.js built-ins.** An `attribute float uv` silently fell back to a flat material for two releases; `renderer.debug.onShaderError` exists to make that loud. (`main.ts`)
-9. **The Electron plugin is skipped under `VITEST`.** It breaks the test worker. (`vite.config.ts`)
+7. **`peakImpactSpeed` is the peak, never the latest.** The terrain clamp zeroes inward velocity on contact, so a "most recent" value reads ~0 one step later and the crash goes unreported. (`flight-controller.ts`)
+8. **Illegal state transitions throw.** The `ALLOWED` table is the guard that turns a wrong path into a loud failure instead of a screen stuck in the wrong mode. Don't soften it to a silent return. (`state-machine.ts`)
+9. **The ship is one compound body.** A constraint network explodes under jitter. (`ship-builder.ts`)
+10. **Shader attribute names must not collide with Three.js built-ins.** An `attribute float uv` silently fell back to a flat material for two releases; `renderer.debug.onShaderError` exists to make that loud. (`main.ts`)
+11. **The Electron plugin is skipped under `VITEST`.** It breaks the test worker. (`vite.config.ts`)
 
 ### 11.4 Working conventions
 
@@ -673,9 +759,10 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 | `HOLD_GAIN` / `HOLD_DAMP` | 20 / 16 | `flight/flight-controller.ts` | Hold-mode PD response |
 | `NODE_SNAP_RANGE` | 2.5 m | `building/vab-controller.ts` | VAB snap forgiveness |
 | Terrain amplitude | 4% of radius | `rendering/procedural-planet.ts` | Mountain height |
-| `IMPACT_CRASH_THRESHOLD` | 30 m/s | `ui/win-states.ts` | Landing vs. crash |
-| `SURFACE_CONTACT_ALT` | 50 m | `ui/win-states.ts` | "At the surface" band |
-| `SURFACE_PENETRATION_TOLERANCE` | 10 m | `ui/win-states.ts` | "Inside the body" floor |
+| `IMPACT_CRASH_THRESHOLD` | 30 m/s | `flight/crash-detection.ts` | Landing vs. crash, both bodies |
+| `SURFACE_CONTACT_ALT` | 50 m | `flight/crash-detection.ts` | "At the surface" band |
+| `SURFACE_PENETRATION_TOLERANCE` | 10 m | `flight/crash-detection.ts` | "Inside the body" floor |
+| `Q_ALARM` | 200 | `flight/hud.ts` | When the Q readout goes to alarm |
 | `FIXED_DT` | 1/60 s | `main.ts` | Physics rate — **invariant** |
 | Terrain clamp tolerance | 0.5 m | `flight/flight-controller.ts` | Liftoff vs. clipping |
 | `TRAJECTORY_STEPS` × `_DT` | 2100 × 0.5 s | `ui/orbit-map.ts` | Map lookahead |
@@ -703,16 +790,15 @@ MOON.orbitRadius ──→ SOI radius ──→ and transfer Δv
 
 | # | Finding | Where | Impact |
 | --- | --- | --- | --- |
-| 1 | `GameState.MAP` is declared but never transitioned to; the map is an overlay only. | `core/state-machine.ts`, `main.ts` | Dead code path. Harmless, misleading. |
+| 1 | `GameState.MAP` is declared and appears in the `ALLOWED` table, but nothing ever transitions to it; the map is an overlay only. | `core/state-machine.ts`, `main.ts` | Dead code path. Harmless, misleading. |
 | 2 | `WinStates.onEvent` has no listener. Milestones are banners and nothing else. | `main.ts` | Blocks any scoring/progression feature. |
 | 3 | The Winglet has no aerodynamic effect. Drag ignores geometry entirely. | `flight-controller.ts` | A part whose description lies about what it does. |
 | 4 | Luna moves 2.94× faster than its own gravity implies. | `constants.ts` | Transfers can't be computed, only guessed. See [§7.1](#71-lunas-orbit-is-kinematic). |
 | 5 | Jettisoned stages don't remove their remaining fuel from the shared pool. | `flight-controller.ts` | Dropping a partly-full tank keeps its fuel. |
-| 6 | The `Q` readout turns red above 200, but its comment says 500. | `hud.ts` | Stale comment; the code value is the real one. |
-| 7 | Luna's craters reach ~45 m below mean radius, but the crash floor is 10 m. | `win-states.ts` vs `procedural-planet.ts` | A landing deep in a crater may register as a crash. |
-| 8 | Thrust always acts through the centre of mass along local +Y. | `flight-controller.ts` | Asymmetric engine placement has no consequence. |
-| 9 | Stage boundaries come from strut placement, and nothing explains this. | `stage-manager.ts` | The least discoverable mechanic in the game. |
-| 10 | No coverage for rendering, VAB, or camera code. | `test/` | Regressions there are found by playing. |
+| 6 | Luna's craters reach ~45 m below mean radius, but the crash floor is 10 m. | `crash-detection.ts` vs `procedural-planet.ts` | A landing deep in a crater may register as a crash. |
+| 7 | Thrust always acts through the centre of mass along local +Y. | `flight-controller.ts` | Asymmetric engine placement has no consequence. |
+| 8 | Stage boundaries come from strut placement, and nothing explains this. | `stage-manager.ts` | The least discoverable mechanic in the game. |
+| 9 | No coverage for rendering, the VAB's snapping logic, or the cameras. | `test/` | Regressions there are found by playing. |
 
 ---
 
@@ -738,15 +824,15 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 
 | Feature | Cost | Notes |
 | --- | --- | --- |
-| Save/load ship designs | Low | `ShipDesign` is already plain serialisable data. |
+| Save/load ship designs | Low | `ShipDesign` is already plain serialisable data, and `localStorage` persistence is already established by `theme.ts`. |
 | Wire up `onEvent` — mission log, per-flight summary | Low | The hook is built and tested; see gap #2. |
-| Make struts visibly stage-defining in the VAB | Low | Addresses gap #9, the worst discoverability problem. |
+| Make struts visibly stage-defining in the VAB | Low | Addresses gap #8, the worst discoverability problem. The staging panel and `Tooltip` component both already exist. |
 | Make the winglet real | Medium | Needs per-part drag with orientation; addresses gap #3. |
 | Per-tank fuel and crossfeed | Medium | Addresses gap #5; adds real design decisions. |
 | Manoeuvre nodes | Medium-high | Turns the map from an observation tool into a planning one. |
 | More parts (RCS, decoupler proper, larger engine) | Medium | Every part multiplies the design space; also dilutes pillar [§2.3](#23-small-enough-to-hold-in-your-head). |
 | A third body | High | Needs the patched-conic model to handle nesting. |
-| Audio | Medium | Would be the first non-procedural asset — check against pillar [§2.4](#24-procedural-everything). |
+| Audio | Medium | Now that fonts have set the precedent, this is a smaller step than it was — but settle the [§2.4](#24-procedural-everything) question first. |
 
 ### 14.3 Explicit non-goals
 
@@ -781,4 +867,5 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 
 | Version | Change |
 | --- | --- |
+| 0.2.0 | Revised against the merged GUI/UX overhaul: PAUSED state and validated transitions, settings overlay, component library and theming, Terra impact detection, `crash-detection.ts` thresholds, expanded test suite. Two invariants added; the stale-`Q`-comment gap resolved upstream; the "no external assets" pillar amended for the bundled webfonts. |
 | 0.1.0 | Initial draft. Full as-built specification of v0.4.0 derived from source; vision sections stubbed for the project owner. |
