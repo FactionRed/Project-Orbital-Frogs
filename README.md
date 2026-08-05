@@ -70,3 +70,8 @@ Three.js · cannon-es · simplex-noise · Vite + TypeScript · Electron · Vites
 Physics constants live in `src/physics/constants.ts` and part stats in
 `src/entities/parts-catalog.ts` — tuned for a two-stage rocket to reach orbit
 and the moon. Adjust to taste.
+
+[**docs/GDD.md**](docs/GDD.md) is the game design document: every system, every
+tuning constant and what it governs, the invariants not to break, and the
+`window.__game` API for driving the game programmatically. Written to be read by
+people and by coding agents.
