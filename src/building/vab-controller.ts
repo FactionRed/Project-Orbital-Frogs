@@ -295,6 +295,35 @@ export class VabController {
     this.cancelPlace();
   }
 
+  /**
+   * Place a part at an explicit height on the centreline, attached to `parentUid`.
+   * Skips pointer picking and node snapping entirely.
+   *
+   * Exists for scripted assembly (see `window.__game.stack`): the normal path
+   * resolves snapping by raycasting from the camera, so it cannot build a
+   * rocket without a camera pointed at the right place.
+   */
+  placeAt(partId: string, y: number, parentUid?: string): string {
+    const def = getPartDef(partId);
+    const uid = `u${this.uidCounter++}`;
+    const placed: PlacedPart = {
+      uid,
+      partId,
+      position: new THREE.Vector3(0, y, 0),
+      rotation: new THREE.Euler(),
+      attachParentUid: parentUid,
+    };
+    this.design.parts.push(placed);
+    if (!this.design.rootPartUid && def.kind === 'pod') this.design.rootPartUid = uid;
+
+    const mesh = this.makeMesh(def, false);
+    mesh.position.copy(placed.position);
+    mesh.userData.uid = uid;
+    this.meshes.set(uid, mesh);
+    this.group.add(mesh);
+    return uid;
+  }
+
   /** Select an existing placed part for rotate/delete. */
   selectAt(ndc: THREE.Vector2): void {
     const hit = this.pickPartUnder(ndc);

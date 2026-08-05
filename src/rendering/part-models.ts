@@ -74,6 +74,7 @@ export function buildPartMesh(def: PartDef, ghost = false): THREE.Mesh {
       case 'engine': buildEngine(m, def); break;
       case 'winglet': buildWinglet(m, def); break;
       case 'strut': buildStrut(m, def); break;
+      case 'decoupler': buildDecoupler(m, def); break;
       default: buildFallback(m, def); break;
     }
     const geom = m.buildGeometry();
@@ -239,9 +240,13 @@ function buildTank(m: VoxelModel, def: PartDef): void {
 function buildEngine(m: VoxelModel, def: PartDef): void {
   const { hx, hy } = grid(def);
   const exit = hx;                                  // bell exit fills the box
-  const throat = Math.max(2, Math.round(hx * 0.26));
+  // A vacuum nozzle is longer and pinches harder at the throat — that huge
+  // bell is exactly what buys its efficiency and what ruins it in thick air.
+  // Engines taller than they are wide get that treatment.
+  const vacuumNozzle = def.size[1] > def.size[0];
+  const throat = Math.max(2, Math.round(hx * (vacuumNozzle ? 0.18 : 0.26)));
   const yExit = -hy;
-  const yThroat = yExit + Math.round(hy * 1.15);
+  const yThroat = yExit + Math.round(hy * (vacuumNozzle ? 1.35 : 1.15));
   const yTop = hy;
 
   // Mount flange at the top, where the engine bolts to the stage above.
@@ -361,6 +366,35 @@ function buildStrut(m: VoxelModel, def: PartDef): void {
 
   // Separation plane — the joint that fires when this stage is dropped.
   m.addHollowBox(-hx, -1, -hz, hx, 1, hz, C.marking);
+}
+
+/**
+ * Stack Decoupler — a squat separation collar. Explosive bolts around the rim
+ * and a hazard band, because this is the part that cuts the rocket in half and
+ * the player needs to spot it in a stack at a glance.
+ */
+function buildDecoupler(m: VoxelModel, def: PartDef): void {
+  const { hx, hy } = grid(def);
+  const r = hx;
+
+  // Main collar, waisted at the separation plane so the split line reads.
+  m.addProfile(0, 0, -hy, hy, (t) => r * (1 - 0.12 * Math.sin(t * Math.PI)), C.panel);
+
+  // Mating flanges top and bottom.
+  m.addTube(0, 0, r, r - 2, hy - 1, hy, C.metalDark);
+  m.addTube(0, 0, r, r - 2, -hy, -hy + 1, C.metalDark);
+
+  // The separation plane itself.
+  m.addTube(0, 0, r, r - 3, -1, 0, C.marking);
+
+  // Explosive bolts spaced around the rim.
+  const BOLTS = 8;
+  for (let i = 0; i < BOLTS; i++) {
+    const a = (i / BOLTS) * Math.PI * 2;
+    const bx = Math.round(Math.cos(a) * (r - 1));
+    const bz = Math.round(Math.sin(a) * (r - 1));
+    m.addBox(bx - 1, -1, bz - 1, bx + 1, 1, bz + 1, C.charcoal);
+  }
 }
 
 /** Anything without a dedicated model: a plain box in the catalog colour. */

@@ -5,7 +5,7 @@ document:   Game Design Document (GDD)
 project:    Project Orbital Frogs
 repository: FactionRed/Project-Orbital-Frogs
 game_version: 0.4.0
-doc_version:  0.3.1
+doc_version:  0.4.0
 doc_status:   as-built specification + stubbed vision
 last_verified_against: 2023cd7
 ```
@@ -59,7 +59,7 @@ last_verified_against: 2023cd7
 
 ✅ **As-built**
 
-> Build a rocket out of five parts, fly it off a procedurally generated planet, orbit, transfer to a moon, land, and come home. The whole space program fits in a browser tab and takes about ten minutes to fail at.
+> Build a rocket out of a handful of parts, fly it off a procedurally generated planet, orbit, transfer to a moon, land, and come home. The whole space program fits in a browser tab and takes about ten minutes to fail at.
 
 Project Orbital Frogs is a miniature Kerbal Space Program. It keeps the parts that make KSP's fantasy work — real orbital mechanics, a build-it-yourself rocket, a flight that fails for reasons you can diagnose — and throws out the tech tree, the economy, the campaign, and the part count.
 
@@ -69,7 +69,7 @@ Project Orbital Frogs is a miniature Kerbal Space Program. It keeps the parts th
 | Perspective | 3D third-person, orbital camera |
 | Platform | Browser (Vite dev server) and Windows desktop (Electron, portable `.exe`) |
 | Session length | 2–10 minutes per launch attempt |
-| Content scale | 5 parts, 2 celestial bodies, 4 mission milestones |
+| Content scale | 7 parts, 2 celestial bodies, 4 mission milestones |
 | Rendering | Procedural geometry and shaders; three bundled webfonts |
 | Source size | ~6,000 lines of TypeScript + ~800 lines of CSS |
 
@@ -103,7 +103,7 @@ When a launch fails, the player should be able to say *why*. Every failure mode 
 
 ### 2.3 Small enough to hold in your head
 
-Five parts. Two bodies. Four milestones. A player can enumerate the entire content of the game after one session, which makes mastery — rather than discovery — the thing that keeps them playing.
+Seven parts. Two bodies. Four milestones. A player can enumerate the entire content of the game after one session, which makes mastery — rather than discovery — the thing that keeps them playing.
 
 ### 2.4 Procedural everything
 
@@ -115,7 +115,7 @@ No textures, no mesh files, no audio. Parts are voxel models built in code (`src
 
 ### 2.5 The build is the difficulty curve
 
-There is no tutorial, no tech tree, and no unlock gating. The only thing standing between the player and Luna is whether their rocket has enough delta-v — which is a consequence of how they stacked five parts. Difficulty is authored entirely through the [tuning](#12-tuning-reference).
+There is no tutorial, no tech tree, and no unlock gating. The only thing standing between the player and Luna is whether their rocket has enough delta-v — which is a consequence of which engines they chose and where they put the decoupler. Difficulty is authored entirely through the [tuning](#12-tuning-reference).
 
 ---
 
@@ -215,19 +215,23 @@ The Vehicle Assembly Building is where the player stacks parts. It is a free-pla
 
 All five parts, complete. `size` is **half-extents** in metres; a tank is therefore 3 m wide and 5 m tall.
 
-| Part | Kind | Dry mass (t) | Fuel | Thrust (kN) | Size (half-extents) | Attach nodes |
+| Part | Kind | Dry mass (t) | Fuel | Thrust sea / vac (kN) | Exhaust vel. (m/s) | Attach nodes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Command Pod | `pod` | 0.80 | — | — | 1.2 × 1.2 × 1.2 | bottom only |
-| Fuel Tank | `tank` | 0.25 | 1200 | — | 1.5 × 2.5 × 1.5 | top + bottom |
-| Engine | `engine` | 1.00 | — | 700 | 1.0 × 1.0 × 1.0 | top only |
-| Winglet | `winglet` | 0.10 | — | — | 2.0 × 0.5 × 0.5 | **none** (surface-attach) |
-| Strut | `strut` | 0.05 | — | — | 0.5 × 2.0 × 0.5 | top + bottom |
+| Command Pod | `pod` | 0.80 | — | — | — | bottom only |
+| Fuel Tank | `tank` | 1.20 | 120 | — | — | top + bottom |
+| Booster Engine | `engine` | 1.80 | — | 240 / 265 | 290 / 320 | top only |
+| Vacuum Engine | `engine-vac` | 1.20 | — | 55 / 130 | 190 / 450 | top only |
+| Stack Decoupler | `decoupler` | 0.20 | — | — | — | top + bottom |
+| Winglet | `winglet` | 0.10 | — | — | — | **none** (surface-attach) |
+| Strut | `strut` | 0.05 | — | — | — | top + bottom |
 
-Fuel has mass: `FUEL_DENSITY = 0.02 t` per unit, so a full tank weighs **24 t of fuel + 0.25 t dry**. Fuel mass dominates every design decision in the game.
+Fuel has mass: `FUEL_DENSITY = 0.02 t` per unit, so a full tank weighs **2.4 t of fuel + 1.2 t dry**.
+
+**The two engines are deliberately bad at each other's job.** The booster has the thrust to leave the pad and mediocre efficiency; the vacuum engine is far more efficient but cannot lift its own rocket through air. Where each one goes matters more than how many you bolt on — see [§5.5](#55-reference-designs).
 
 **The Winglet is currently decorative.** It has no aerodynamic effect anywhere in the simulation — drag is applied uniformly per rigid body with no reference to part geometry (`src/flight/flight-controller.ts`, drag loop). Its description says "Aerodynamic fin for stability"; that is aspirational. See [§13](#13-known-gaps-and-inconsistencies).
 
-**The Strut is the decoupler.** Despite the name, its function is to split stages — see [§5.4](#54-staging-derivation).
+**The Stack Decoupler splits stages.** Struts used to do this job, which meant the part labelled "structural connector" silently decided the staging and there was no way to brace a rocket without also cutting it in half. Struts are now purely structural.
 
 ### 5.2 Attachment model
 
@@ -259,23 +263,27 @@ The **root part** is the first `pod` placed. Deleting a part re-parents its chil
 Stages are **derived from the part tree**, never authored (`src/flight/stage-manager.ts`):
 
 1. From each engine, walk up the `attachParentUid` chain, collecting tanks.
-2. Stop at the first `strut` — that strut is this stage's decoupler.
+2. Stop at the first `decoupler` — that is this stage's separation point.
 3. Engines sharing a decoupler merge into one stage.
 4. Order by decoupler depth, deepest first. Engines with no decoupler fire last.
 
-So **a strut between two tank/engine groups creates a stage boundary**, and the group *below* it fires first. This is the single most important thing a player has to infer, and nothing in the UI explains it.
+So **a decoupler between two tank/engine groups creates a stage boundary**, and the group *below* it fires first. The part's description says so, but nothing in the VAB shows the resulting stage split while you build.
 
 ### 5.5 Reference designs
 
-Computed from the catalog (exhaust velocity 100 m/s — see [§6.3](#63-thrust-and-fuel)):
+Computed from the catalog. `TWR` is at liftoff and uses **sea-level** thrust — the number that decides whether the rocket moves at all.
 
-| Design | Dry (t) | Wet (t) | Δv (m/s) | Liftoff TWR | Verdict |
-| --- | --- | --- | --- | --- | --- |
-| Pod + tank + engine | 2.05 | 26.05 | **254** | 2.69 | Orbits Terra with a good gravity turn. Cannot escape. |
-| Pod + tank + engine + strut | 2.10 | 26.10 | **252** | 2.68 | Same, one stage's worth. |
-| Two-stage (pod + tank + engine, strut, tank + engine) | — | 51.4 | **≈317** | 1.36 | Reaches Luna. Low liftoff TWR — throttle discipline required. |
+| Design | Δv (m/s) | Liftoff TWR | Outcome |
+| --- | --- | --- | --- |
+| **Booster below, vacuum above, decoupler between** | **411** | **1.30** | **Reaches orbit** |
+| One stage, booster only | 157 | 3.87 | Plenty of thrust, nowhere near the Δv |
+| One stage, vacuum only | 252 | 0.98 | Never leaves the pad |
+| Vacuum engine on the first stage | — | 0.31 | Never leaves the pad |
+| Booster on both stages | 309 | 1.26 | Short — the upper stage wants efficiency |
 
-For context: Terra orbital velocity is **173 m/s**, escape velocity is **245 m/s**. A single stage clears orbit but not escape — deliberately. Atmospheric drag costs roughly 30–60 m/s on a decent ascent, which is what makes the margin tight.
+A stable low orbit costs roughly **350 m/s** once gravity and drag losses are paid, against an ideal Hohmann cost of 224 m/s. Terra's orbital velocity is 173 m/s and escape is 245 m/s.
+
+**No single stage can both carry the Δv and leave the pad.** Bolting more tanks onto the efficient engine does eventually buy enough Δv, but that rocket is far too heavy for the thrust it has. Satisfying both constraints at once requires staging, which is the point.
 
 ### 5.6 Part models and art direction
 
@@ -335,13 +343,23 @@ Luna's SOI is `a · (m/M)^0.4` = **7,299 m** from Luna's centre.
 
 ### 6.3 Thrust and fuel
 
+Each engine carries its own performance, and the model is the physical one: **mass flow is fixed by the vacuum rating and never varies**, while delivered thrust falls as air pressure pushes back on the exhaust. Specific impulse therefore drops at sea level on its own rather than being tuned separately.
+
 ```
-fuel burned   = Σthrust × throttle × dt × FUEL_BURN_RATE      (FUEL_BURN_RATE = 0.5)
-mass lost     = fuel burned × FUEL_DENSITY                    (FUEL_DENSITY = 0.02 t/unit)
-exhaust vel.  = 1 / (FUEL_BURN_RATE × FUEL_DENSITY) = 100 m/s
+vac            = vacuumFractionAt(altitude)        // 0 at sea level, 1 in space
+thrust         = thrustSea + (thrust − thrustSea) × vac
+fuel per second = Σ (engine.thrust × engine.burnRate)     // vacuum rating — constant
+exhaust velocity = 1 / (burnRate × FUEL_DENSITY)          // in vacuum
 ```
 
-That 100 m/s exhaust velocity is the number the entire game balances around: Δv = 100 · ln(wet/dry).
+| Engine | Thrust sea / vac | Exhaust velocity sea / vac | For |
+| --- | --- | --- | --- |
+| Booster | 240 / 265 kN | 290 / 320 m/s | Getting off the pad |
+| Vacuum | 55 / 130 kN | 190 / 450 m/s | Everything after that |
+
+**Why these numbers and not the old ones.** A stage's burn time is close to its own Δv divided by its acceleration, so propulsion tuning decides whether the player has time to fly. Every engine used to share an exhaust velocity of 100 m/s, which needs a **12.7:1 mass ratio** to produce useful Δv — and that rocket ends its burn pulling **34 g** with the tank empty after **3.4 seconds**. A gravity turn here takes 25–40 seconds. There was no time to steer, so every launch was a cannon shot into the thickest air, and orbit was unreachable rather than merely hard.
+
+Mass ratios are now around 1.5–1.8, a two-stage rocket flies for about **17 seconds** and peaks near **4 g**, and the skill moved to where it belongs: choosing the right engine for each stage and getting the TWR right.
 
 Thrust is applied along the **root body's local +Y**, at its centre of mass — so engines never produce torque, regardless of where they're mounted. Off-axis engine placement is not simulated.
 
@@ -354,9 +372,11 @@ A stage only produces thrust when **activated** — see [§6.6](#66-staging).
 Terra only. Exponential density, quadratic drag, applied per rigid body at its centre of mass.
 
 ```
-ρ(h) = 0.05 · e^(−h/500)     for 0 ≤ h < 3000 m
+ρ(h) = 0.05 · e^(−h/500)     for 0 ≤ h < 3000 m     [airDensityAt]
 F_drag = 0.1 · ρ · v²        opposing velocity
 ```
+
+`airDensityAt` and `vacuumFractionAt` in `src/physics/constants.ts` are the single source of truth: drag, the `Q` readout, and engine thrust all read the atmosphere through them, so they cannot drift apart.
 
 | Altitude | Density | Relative |
 | --- | --- | --- |
@@ -676,6 +696,7 @@ Staging splits the compound: shapes move from the parent body to a new body, mas
 | `ship.test.ts` | Mass/fuel aggregation, launch validity |
 | `stage-manager.test.ts` | Stage derivation from part trees |
 | `crash-detection.test.ts` | Threshold predicate, NaN and sentinel guards |
+| `propulsion.test.ts` | Atmosphere model, engine thrust curves, burn times, and that the design puzzle discriminates |
 | `win-states.test.ts` | Terra impact detection, milestone thresholds, landing-vs-crash exclusivity |
 | `hud.test.ts` | Readout formatting and alarm states |
 | `navball-orientation.test.ts` | Orientation maths through the singularities |
@@ -739,7 +760,7 @@ Prefer this over synthesising keyboard events. `__game.build()` + `__game.launch
 | --- | --- | --- |
 | Any world physics | `src/physics/constants.ts` | Δv table in [§5.5](#55-reference-designs); every derived figure in [§7](#7-the-world--terra-and-luna) |
 | Any part stat | `src/entities/parts-catalog.ts` | Δv table, TWR, burn times |
-| Fuel economy | `FUEL_BURN_RATE` in `flight-controller.ts` | Exhaust velocity → **all** Δv figures |
+| Engine performance | `thrust` / `thrustSea` / `burnRate` in `parts-catalog.ts` | Δv table in [§5.5](#55-reference-designs), burn times, `test/propulsion.test.ts` |
 | Crash / landing thresholds | `src/flight/crash-detection.ts` | `test/win-states.test.ts` and `test/crash-detection.test.ts` (both import them) |
 | Interface styling | `src/styles/tokens.css` then the screen file | `test/tokens.test.ts` |
 | Handling feel | `TORQUE_PER_TONNE`, `THROTTLE_RATE` in `controls.ts`; `HOLD_GAIN`/`HOLD_DAMP`/`SAS_GAIN` in `flight-controller.ts` | Nothing automated — fly it |
@@ -757,11 +778,13 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 6. **Landing and crash tests share one altitude floor.** They must stay mutually exclusive — a ship at rest inside Luna once reported a landing *and* a crash in the same frame. (`win-states.ts`)
 7. **`peakImpactSpeed` is the peak, never the latest.** The terrain clamp zeroes inward velocity on contact, so a "most recent" value reads ~0 one step later and the crash goes unreported. (`flight-controller.ts`)
 8. **Illegal state transitions throw.** The `ALLOWED` table is the guard that turns a wrong path into a loud failure instead of a screen stuck in the wrong mode. Don't soften it to a silent return. (`state-machine.ts`)
-9. **Part models are scaled uniformly, never per-axis.** Per-axis scaling forces every model to fill its collision box exactly, distorting anything built to different proportions. (`part-models.ts`)
-10. **`VoxelModel` stores voxels in a Map, not an array.** Models are built by overpainting; an array needs a linear scan to find the voxel being recoloured, making construction quadratic. At model resolution that is the difference between milliseconds and seconds. (`voxel-model.ts`)
-11. **The ship is one compound body.** A constraint network explodes under jitter. (`ship-builder.ts`)
-12. **Shader attribute names must not collide with Three.js built-ins.** An `attribute float uv` silently fell back to a flat material for two releases; `renderer.debug.onShaderError` exists to make that loud. (`main.ts`)
-13. **The Electron plugin is skipped under `VITEST`.** It breaks the test worker. (`vite.config.ts`)
+9. **Engine mass flow comes from the vacuum rating, not from delivered thrust.** Burning fuel in proportion to *current* thrust would make engines more efficient in thin air instead of less, inverting the whole sea-level-versus-vacuum trade. (`flight-controller.ts`)
+10. **Burn time must stay long enough to steer.** A stage burns for roughly its Δv over its acceleration; below about 8 seconds there is no time to fly a gravity turn and orbit becomes unreachable regardless of Δv. Pinned by `test/propulsion.test.ts`. (`parts-catalog.ts`)
+11. **Part models are scaled uniformly, never per-axis.** Per-axis scaling forces every model to fill its collision box exactly, distorting anything built to different proportions. (`part-models.ts`)
+12. **`VoxelModel` stores voxels in a Map, not an array.** Models are built by overpainting; an array needs a linear scan to find the voxel being recoloured, making construction quadratic. At model resolution that is the difference between milliseconds and seconds. (`voxel-model.ts`)
+13. **The ship is one compound body.** A constraint network explodes under jitter. (`ship-builder.ts`)
+14. **Shader attribute names must not collide with Three.js built-ins.** An `attribute float uv` silently fell back to a flat material for two releases; `renderer.debug.onShaderError` exists to make that loud. (`main.ts`)
+15. **The Electron plugin is skipped under `VITEST`.** It breaks the test worker. (`vite.config.ts`)
 
 ### 11.4 Working conventions
 
@@ -791,9 +814,11 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 | `ATMOSPHERE.dragFactor` | 0.1 | `physics/constants.ts` | Cd × A, uniform |
 | `SUN_DIRECTION` | [1, 0.35, 0.6] | `physics/constants.ts` | Terminator angle |
 | `FUEL_DENSITY` | 0.02 t/unit | `entities/parts-catalog.ts` | **Exhaust velocity**, wet mass |
-| `FUEL_BURN_RATE` | 0.5 | `flight/flight-controller.ts` | **Exhaust velocity**, burn time |
-| Engine `thrust` | 700 kN | `entities/parts-catalog.ts` | TWR, burn rate |
-| Tank `fuel` | 1200 | `entities/parts-catalog.ts` | Δv per stage |
+| `DEFAULT_BURN_RATE` | 0.15625 | `entities/parts-catalog.ts` | Exhaust velocity for engines that don't specify one |
+| Engine `burnRate` | 0.15625 / 0.11111 | `entities/parts-catalog.ts` | **Exhaust velocity** → Δv and burn time |
+| Engine `thrust` / `thrustSea` | 265/240, 130/55 kN | `entities/parts-catalog.ts` | TWR, and the sea-vs-vacuum trade |
+| Tank `fuel` | 120 | `entities/parts-catalog.ts` | Δv per stage, burn duration |
+| Tank `dryMass` | 1.2 t | `entities/parts-catalog.ts` | Mass ratio — keeps peak g sane |
 | `THROTTLE_RATE` | 0.8 /s | `flight/controls.ts` | Throttle ramp |
 | `TORQUE_PER_TONNE` | 16 | `flight/controls.ts` | Manual authority |
 | `SAS_GAIN` | 5 | `flight/flight-controller.ts` | SAS damping |
@@ -814,8 +839,12 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 Changing any of these cascades. Recompute before shipping:
 
 ```
-FUEL_BURN_RATE ─┬─→ exhaust velocity ──→ Δv of every design ──→ can you reach orbit?
-FUEL_DENSITY  ──┘                    └─→ wet mass ──→ TWR ──→ can you leave the pad?
+burnRate ─┬─→ exhaust velocity ──→ Δv of every design ──→ can you reach orbit?
+FUEL_DENSITY ┘                 └─→ wet mass ──→ TWR ──→ can you leave the pad?
+
+thrust ──→ TWR ──→ acceleration ──→ BURN TIME ≈ stage Δv / (TWR × g)
+                                    └─→ is there time to fly a gravity turn?
+   (this is the one that was wrong: 3.4 s of burn, 34 g, no time to steer)
 
 PLANET.mass ──→ surface g ──→ TWR requirement ──→ engine thrust adequacy
             └─→ orbital velocity ──→ Δv requirement ──→ number of stages needed
@@ -935,6 +964,7 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 
 | Version | Change |
 | --- | --- |
+| 0.4.0 | Propulsion rebalance: per-engine sea-level/vacuum thrust and burn rates, the two engine types, the stack decoupler taking staging over from the strut. Records why the old tuning made orbit unreachable (3.4 s burns at 34 g) and the design puzzle the new numbers create. Two invariants added. |
 | 0.3.1 | Documented `npm run preview:parts`, the offline model renderer, in §5.6 and the command table. |
 | 0.3.0 | Recorded the part-model art direction as §5.6 after rebuilding the models at higher resolution; added the uniform-scale and Map-storage invariants, the `RES` tuning entry, the two new rendering test suites, and the catalog-proportion gap. |
 | 0.2.1 | Recorded the answer to the frogs question — chibi frogs in space suits — as §14.2, with the existing code that supports it and the mechanics still open. |

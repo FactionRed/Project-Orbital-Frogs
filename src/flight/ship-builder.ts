@@ -29,6 +29,8 @@ export interface ShipBody {
 export interface EngineRef {
   body: CANNON.Body;
   def: PartDef;
+  /** Which placed part this engine is, so staging can tell them apart. */
+  uid: string;
 }
 
 export interface BuiltShip {
@@ -118,7 +120,7 @@ export function buildShipPhysics(design: ShipDesign): BuiltShip {
   const engines: EngineRef[] = [];
   for (const placed of design.parts) {
     const def = getPartDef(placed.partId);
-    if (def.kind === 'engine') engines.push({ body, def });
+    if (def.kind === 'engine') engines.push({ body, def, uid: placed.uid });
   }
 
   return { group, shipBodies: [shipBody], fuel, rootBody, engines, bodyByPartUid };

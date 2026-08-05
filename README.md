@@ -28,7 +28,10 @@ Then open http://localhost:5173
 - **Right-drag** to orbit camera, **wheel** to zoom
 - `Q`/`E` rotate selected part · `Delete` to remove it
 - You need at least a **Command Pod** and an **Engine** to launch
-- Add **Fuel Tanks** for range and **Struts** to separate stages
+- Add **Fuel Tanks** for range and a **Stack Decoupler** to split stages
+- **Booster Engines** have the thrust to leave the pad; **Vacuum Engines** are
+  far more efficient but too feeble to lift anything through air. Boosters
+  below, vacuum engines on top — one stage is never enough
 
 ### Flying
 

@@ -8,18 +8,11 @@ import { CelestialBody } from '../physics/celestial-body';
 import { sphereOfInfluence } from '../physics/orbit-math';
 import type { ShipDesign } from '../entities/ship';
 import { getPartDef } from '../entities/parts-catalog';
-import { PLANET, MOON, SUN_DIRECTION, ATMOSPHERE } from '../physics/constants';
-import { FUEL_DENSITY } from '../entities/parts-catalog';
+import { PLANET, MOON, SUN_DIRECTION, ATMOSPHERE, airDensityAt, vacuumFractionAt } from '../physics/constants';
+import { FUEL_DENSITY, DEFAULT_BURN_RATE } from '../entities/parts-catalog';
 
-// Tuned so one tank (1200 fuel) at full throttle (one 700kN engine) burns for
-// ~3.4s: burn = 700 * 1 * dt * 0.5 ≈ 350 fuel/s → 1200 / 350 ≈ 3.4s of thrust.
-// Effective exhaust velocity = 1 / (0.5 × 0.02) = 100 m/s.
-// Single-stage delta-v (pod+tank+engine, 26t wet / 2t dry) = 100 × ln(12.4) ≈ 252 m/s.
-// Surface orbital velocity is ~173 m/s (ratio ~1.46×); escape velocity is ~245 m/s.
-// So a single stage can orbit (with a gravity turn) but cannot escape — straight
-// up peaks at ~2500m and falls back. Atmospheric drag in the lower 1km costs
-// ~30-60 m/s, so a poor ascent fails. A 2-stage rocket has margin for moon transfer.
-const FUEL_BURN_RATE = 0.5;
+// Engine performance lives on the part definitions now — see parts-catalog.ts
+// for the thrust/burn-rate pairs and the reasoning behind them.
 
 export type HoldMode = 'off' | 'prograde' | 'retrograde' | 'normal' | 'antinormal' | 'radialin' | 'radialout';
 
@@ -43,6 +36,8 @@ export class FlightController {
    *  Starts false — user must press Space to activate the first stage. */
   private stageActive = false;
   private stages: Stage[] = [];
+  /** Fuel remaining in each stage's own tanks. */
+  private stageFuel: number[] = [];
   /** Index of the current (next-to-fire) stage. Public for UI. */
   currentStageIndex = 0;
   /**
@@ -124,6 +119,16 @@ export class FlightController {
     );
 
     this.stages = buildStages(design);
+    // Fuel belongs to the stage that carries the tanks. Without this the whole
+    // rocket shares one pool, so the first stage drains the upper stage's
+    // propellant before it ever fires — which makes staging pointless.
+    this.stageFuel = this.stages.map((st) =>
+      st.tankUids.reduce((sum, uid) => {
+        const part = design.parts.find((p) => p.uid === uid);
+        return sum + (part ? getPartDef(part.partId).fuel ?? 0 : 0);
+      }, 0),
+    );
+    this.ship.fuel = this.stageFuel.reduce((s, f) => s + f, 0);
     this.gravity = new GravitySystem(this.world, () => this.candidates());
   }
 
@@ -152,6 +157,22 @@ export class FlightController {
   dominantBodyFor(pos: { x: number; y: number; z: number }): CelestialBody {
     const shipPos: [number, number, number] = [pos.x, pos.y, pos.z];
     return dominantBody(shipPos, this.candidates());
+  }
+
+  /**
+   * Engines belonging to the stage that is currently lit. Every engine on the
+   * rocket used to fire at once, so an upper stage burned its propellant on
+   * the pad alongside the booster.
+   */
+  private activeEngines() {
+    const st = this.stages[this.currentStageIndex];
+    if (!st) return [];
+    return this.ship.engines.filter((e) => st.engineUids.includes(e.uid));
+  }
+
+  /** Fuel remaining in the stage currently selected, for UI. */
+  currentStageFuel(): number {
+    return this.stageFuel[this.currentStageIndex] ?? 0;
   }
 
   /** Stage list for UI rendering (read-only). */
@@ -372,6 +393,10 @@ export class FlightController {
       return !uid || !toRemove.has(uid);
     });
 
+    // Whatever was left in the dropped tanks leaves with them.
+    this.stageFuel[this.currentStageIndex] = 0;
+    this.ship.fuel = this.stageFuel.reduce((s, f) => s + f, 0);
+
     this.currentStageIndex++;
     // Next stage starts inactive — user must press Space again to activate it.
     this.stageActivated = false;
@@ -425,15 +450,38 @@ export class FlightController {
       }
     }
 
-    if (this.stageActive && this.ship.fuel > 0 && this.throttle > 0) {
-      const totalThrust = this.ship.engines.reduce((s, e) => s + (e.def.thrust ?? 0), 0);
-      if (totalThrust > 0) {
-        const fuelBurn = totalThrust * this.throttle * dt * FUEL_BURN_RATE;
-        this.ship.fuel = Math.max(0, this.ship.fuel - fuelBurn);
+    const stageFuelLeft = this.stageFuel[this.currentStageIndex] ?? 0;
+    if (this.stageActive && stageFuelLeft > 0 && this.throttle > 0) {
+      const root = this.ship.rootBody;
+      // Engine performance depends on how much air is pushing back on the
+      // exhaust. Mass flow is fixed by each engine's vacuum rating and does not
+      // vary, so an engine delivering less thrust in air is simply burning fuel
+      // less efficiently — sea-level and vacuum specific impulse fall out of
+      // the thrust pair rather than being tuned separately.
+      const shipAlt = Math.hypot(
+        root.position.x - this.planet.position.x,
+        root.position.y - this.planet.position.y,
+        root.position.z - this.planet.position.z,
+      ) - this.planet.data.radius;
+      const vac = vacuumFractionAt(shipAlt);
+
+      let thrustNow = 0;
+      let fuelPerSecond = 0;
+      for (const e of this.activeEngines()) {
+        const vacThrust = e.def.thrust ?? 0;
+        if (vacThrust <= 0) continue;
+        const seaThrust = e.def.thrustSea ?? vacThrust;
+        thrustNow += seaThrust + (vacThrust - seaThrust) * vac;
+        fuelPerSecond += vacThrust * (e.def.burnRate ?? DEFAULT_BURN_RATE);
+      }
+
+      if (thrustNow > 0) {
+        const fuelBurn = Math.min(stageFuelLeft, fuelPerSecond * this.throttle * dt);
+        this.stageFuel[this.currentStageIndex] = stageFuelLeft - fuelBurn;
+        this.ship.fuel = this.stageFuel.reduce((s, f) => s + f, 0);
 
         // Reduce body mass as fuel is burned (fuel has mass via FUEL_DENSITY).
         // updateMassProperties() recalculates inertia tensor from new mass.
-        const root = this.ship.rootBody;
         const massLoss = fuelBurn * FUEL_DENSITY;
         if (massLoss > 0 && root.mass > massLoss) {
           root.mass -= massLoss;
@@ -441,7 +489,7 @@ export class FlightController {
         }
 
         // Apply force along the root body's local +Y (engines push "up").
-        const f = totalThrust * this.throttle;
+        const f = thrustNow * this.throttle;
         const localForce = new CANNON.Vec3(0, f, 0);
         const worldForce = root.quaternion.vmult(localForce);
         root.applyForce(worldForce, new CANNON.Vec3(0, 0, 0));
@@ -458,8 +506,8 @@ export class FlightController {
       const ry = sb.body.position.y - this.planet.position.y;
       const rz = sb.body.position.z - this.planet.position.z;
       const alt = Math.hypot(rx, ry, rz) - this.planet.data.radius;
-      if (alt < 0 || alt >= ATMOSPHERE.height) continue;
-      const density = ATMOSPHERE.surfaceDensity * Math.exp(-alt / ATMOSPHERE.scaleHeight);
+      const density = airDensityAt(alt);
+      if (density <= 0) continue;
       const v = sb.body.velocity;
       const speed = Math.hypot(v.x, v.y, v.z);
       if (speed < 0.1) continue;
