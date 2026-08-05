@@ -23,6 +23,8 @@ export class Hud {
   private precisionLamp: HTMLElement;
   /** Tank capacity of the current vessel; -1 until the first update. */
   private maxFuel = -1;
+  /** Which stage the fuel gauge is currently baselined against. */
+  private stageIndex = -1;
 
   constructor() {
     this.root = document.createElement('div');
@@ -109,13 +111,20 @@ export class Hud {
       this.periapsis.setState('caution');
     }
 
-    // Fuel as a fraction of what this vessel launched with, so the bar means
-    // something regardless of how many tanks the player bolted on.
-    if (this.maxFuel < 0) this.maxFuel = flight.ship.fuel;
-    const fuelFrac = this.maxFuel > 0 ? flight.ship.fuel / this.maxFuel : 0;
-    this.fuelGauge.setFraction(fuelFrac, `${flight.ship.fuel.toFixed(0)} / ${this.maxFuel.toFixed(0)}`);
+    // Fuel in the LIT stage, not the whole rocket. Fuel belongs to the stage
+    // carrying the tanks, so a total would plateau at the upper stage's supply
+    // and never reach zero — the player would get no cue that the current
+    // stage is dry and it is time to stage.
+    const stageFuel = flight.currentStageFuel();
+    // Re-baseline on a new stage, and on resetMaxFuel() for a new vessel.
+    if (this.stageIndex !== flight.currentStageIndex || this.maxFuel < 0) {
+      this.stageIndex = flight.currentStageIndex;
+      this.maxFuel = stageFuel;
+    }
+    const fuelFrac = this.maxFuel > 0 ? stageFuel / this.maxFuel : 0;
+    this.fuelGauge.setFraction(fuelFrac, `${stageFuel.toFixed(0)} / ${this.maxFuel.toFixed(0)}`);
     this.fuelGauge.setThreshold(
-      flight.ship.fuel <= 0 ? 'alarm' : fuelFrac < FUEL_CAUTION ? 'caution' : 'nominal',
+      stageFuel <= 0 ? 'alarm' : fuelFrac < FUEL_CAUTION ? 'caution' : 'nominal',
     );
 
     this.throttle.setFraction(flight.throttle, `${Math.round(flight.throttle * 100)}%`);
