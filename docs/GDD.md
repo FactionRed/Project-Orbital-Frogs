@@ -5,9 +5,9 @@ document:   Game Design Document (GDD)
 project:    Project Orbital Frogs
 repository: FactionRed/Project-Orbital-Frogs
 game_version: 0.4.0
-doc_version:  0.2.0
+doc_version:  0.3.0
 doc_status:   as-built specification + stubbed vision
-last_verified_against: 27d2114
+last_verified_against: e208426
 ```
 
 > **Related documents.** `docs/superpowers/specs/2026-07-18-gui-ux-overhaul-design.md` is the visual design spec for the interface; `docs/superpowers/plans/2026-07-18-gui-ux-overhaul.md` is the implementation plan it was built from. This GDD covers what the game *is*; those cover what the interface *looks like*.
@@ -107,11 +107,11 @@ Five parts. Two bodies. Four milestones. A player can enumerate the entire conte
 
 ### 2.4 Procedural everything
 
-No textures, no models, no audio files. Parts are voxel meshes built in code (`src/rendering/voxel-model.ts`); planets are noise-displaced spheres with shader-based biomes and a day/night terminator (`src/rendering/procedural-planet.ts`). The asset loader (`src/assets.ts`) exists but currently has nothing to load.
+No textures, no mesh files, no audio. Parts are voxel models built in code (`src/rendering/part-models.ts`, see [§5.6](#56-part-models-and-art-direction)); planets are noise-displaced spheres with shader-based biomes and a day/night terminator (`src/rendering/procedural-planet.ts`). The asset loader (`src/assets.ts`) exists but currently has nothing to load.
 
 **This pillar has one exception.** The interface overhaul added three webfonts (`public/fonts/` — VT323 and IBM Plex Mono) to carry the vintage-terminal look. They are the first non-procedural assets in the project.
 
-❓ **Open question:** is the pillar "no external assets" or "no external *art* assets"? The answer decides whether audio is admissible later. See [§14.2](#142-candidate-features).
+❓ **Open question:** is the pillar "no external assets" or "no external *art* assets"? The answer decides whether audio is admissible later. See [§14.3](#143-candidate-features).
 
 ### 2.5 The build is the difficulty curve
 
@@ -157,7 +157,7 @@ The loop is **build → fly → fail → diagnose → rebuild**. The reward for 
 
 ✅ **As-built:** there is **none**. Every session starts from an empty VAB. Ship designs are not saved, milestones are not recorded between launches, and the only persisted state in the entire game is whether the help overlay is visible (`localStorage.hintsVisible`, `src/main.ts`).
 
-🔭 **Vision:** see [§14.2](#142-candidate-features).
+🔭 **Vision:** see [§14.3](#143-candidate-features).
 
 ---
 
@@ -276,6 +276,29 @@ Computed from the catalog (exhaust velocity 100 m/s — see [§6.3](#63-thrust-a
 | Two-stage (pod + tank + engine, strut, tank + engine) | — | 51.4 | **≈317** | 1.36 | Reaches Luna. Low liftoff TWR — throttle discipline required. |
 
 For context: Terra orbital velocity is **173 m/s**, escape velocity is **245 m/s**. A single stage clears orbit but not escape — deliberately. Atmospheric drag costs roughly 30–60 m/s on a decent ascent, which is what makes the margin tight.
+
+### 5.6 Part models and art direction
+
+✅ **As-built** — `src/rendering/part-models.ts`, `src/rendering/voxel-model.ts`
+
+Parts are voxel models generated in code, drawn as recognisable launch-vehicle hardware with liberties taken where the grid or readability demands. The references are the ones named in the source: Atlas V and Vulcan for tanks and interstages, RL10 and BE-4 for the engine bell, Mercury and Apollo for the capsule.
+
+| Part | What it is meant to read as |
+| --- | --- |
+| Command Pod | Crew capsule — ablative heat shield, shoulder flange, tapered pressure vessel, window, short docking ring. The only glass in the catalog. |
+| Fuel Tank | Stage barrel — longitudinal stringers, marking bands, a cable conduit down one side, tinted oxidiser and fuel sections split by a common bulkhead. |
+| Engine | Bell nozzle — hard flare from a narrow throat, hollow interior, cooling ribs, turbopump and feed lines. |
+| Winglet | Swept delta fin — thin plate, darkened leading edge, root bracket. |
+| Strut | Interstage truss and decoupler — corner posts, X-bracing in bays, end flanges, a warning band at the separation plane. |
+
+Two rules govern every model:
+
+1. **Build on the part's own grid.** Models are laid out at `RES = 12` voxels per world unit and the finished mesh is scaled **uniformly** to fit inside the collision box. Scaling each axis independently — which is what the code did before — forces every model to fill its box exactly and distorts anything whose natural proportions differ. That is what flattened the winglet into a doorstop.
+2. **Silhouette first.** At this resolution the outline carries the read and colour only reinforces it. Detail that doesn't change the outline — stringers, cooling ribs, panel seams — is painted on afterwards with `paintIf` rather than modelled, so it costs no triangles.
+
+**Geometry is cached per catalog part** and shared across every mesh; materials are not, because callers tint individual meshes (the placement ghost, VAB selection highlighting). Without the cache, every placed part, every ghost, and every piece of menu debris would rebuild tens of thousands of voxels.
+
+Shapes are composed by layering: a later shape recolours the voxels it covers, and passing `CARVE` instead of a colour removes them, which is how hollow forms like the nozzle throat are made.
 
 ---
 
@@ -631,7 +654,7 @@ Staging splits the compound: shapes move from the parent body to a new body, mas
 
 ### 10.4 Tests
 
-`vitest`, **110 tests across 14 files**. The default environment is `node`; DOM-dependent suites opt in per file with a `// @vitest-environment jsdom` docblock. `test/setup-storage.ts` runs as a global setup file to patch a `localStorage` gap.
+`vitest`, **155 tests across 16 files**. The default environment is `node`; DOM-dependent suites opt in per file with a `// @vitest-environment jsdom` docblock. `test/setup-storage.ts` runs as a global setup file to patch a `localStorage` gap.
 
 | File | Covers |
 | --- | --- |
@@ -648,8 +671,10 @@ Staging splits the compound: shapes move from the parent body to a new body, mas
 | `theme.test.ts` | Theme + reduced-motion persistence |
 | `tokens.test.ts` | Design token presence/consistency |
 | `gauge.test.ts`, `readout.test.ts` | Component behaviour |
+| `voxel-model.test.ts` | Voxel grid, carving, shape primitives, face culling |
+| `part-models.test.ts` | Every catalog part fits its collision box, uniform scale, geometry cache |
 
-Still uncovered: the rendering layer, the VAB controller's snapping logic, and both cameras.
+Still uncovered: the procedural planet shaders, the VAB controller's snapping logic, and both cameras.
 
 ### 10.5 Build and distribution
 
@@ -718,9 +743,11 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 6. **Landing and crash tests share one altitude floor.** They must stay mutually exclusive — a ship at rest inside Luna once reported a landing *and* a crash in the same frame. (`win-states.ts`)
 7. **`peakImpactSpeed` is the peak, never the latest.** The terrain clamp zeroes inward velocity on contact, so a "most recent" value reads ~0 one step later and the crash goes unreported. (`flight-controller.ts`)
 8. **Illegal state transitions throw.** The `ALLOWED` table is the guard that turns a wrong path into a loud failure instead of a screen stuck in the wrong mode. Don't soften it to a silent return. (`state-machine.ts`)
-9. **The ship is one compound body.** A constraint network explodes under jitter. (`ship-builder.ts`)
-10. **Shader attribute names must not collide with Three.js built-ins.** An `attribute float uv` silently fell back to a flat material for two releases; `renderer.debug.onShaderError` exists to make that loud. (`main.ts`)
-11. **The Electron plugin is skipped under `VITEST`.** It breaks the test worker. (`vite.config.ts`)
+9. **Part models are scaled uniformly, never per-axis.** Per-axis scaling forces every model to fill its collision box exactly, distorting anything built to different proportions. (`part-models.ts`)
+10. **`VoxelModel` stores voxels in a Map, not an array.** Models are built by overpainting; an array needs a linear scan to find the voxel being recoloured, making construction quadratic. At model resolution that is the difference between milliseconds and seconds. (`voxel-model.ts`)
+11. **The ship is one compound body.** A constraint network explodes under jitter. (`ship-builder.ts`)
+12. **Shader attribute names must not collide with Three.js built-ins.** An `attribute float uv` silently fell back to a flat material for two releases; `renderer.debug.onShaderError` exists to make that loud. (`main.ts`)
+13. **The Electron plugin is skipped under `VITEST`.** It breaks the test worker. (`vite.config.ts`)
 
 ### 11.4 Working conventions
 
@@ -759,6 +786,7 @@ Each of these encodes a bug that was already fixed once. Breaking one reintroduc
 | `HOLD_GAIN` / `HOLD_DAMP` | 20 / 16 | `flight/flight-controller.ts` | Hold-mode PD response |
 | `NODE_SNAP_RANGE` | 2.5 m | `building/vab-controller.ts` | VAB snap forgiveness |
 | Terrain amplitude | 4% of radius | `rendering/procedural-planet.ts` | Mountain height |
+| `RES` | 12 voxels/unit | `rendering/part-models.ts` | Part model detail — triangle count scales with its square |
 | `IMPACT_CRASH_THRESHOLD` | 30 m/s | `flight/crash-detection.ts` | Landing vs. crash, both bodies |
 | `SURFACE_CONTACT_ALT` | 50 m | `flight/crash-detection.ts` | "At the surface" band |
 | `SURFACE_PENETRATION_TOLERANCE` | 10 m | `flight/crash-detection.ts` | "Inside the body" floor |
@@ -798,13 +826,14 @@ MOON.orbitRadius ──→ SOI radius ──→ and transfer Δv
 | 6 | Luna's craters reach ~45 m below mean radius, but the crash floor is 10 m. | `crash-detection.ts` vs `procedural-planet.ts` | A landing deep in a crater may register as a crash. |
 | 7 | Thrust always acts through the centre of mass along local +Y. | `flight-controller.ts` | Asymmetric engine placement has no consequence. |
 | 8 | Stage boundaries come from strut placement, and nothing explains this. | `stage-manager.ts` | The least discoverable mechanic in the game. |
-| 9 | No coverage for rendering, the VAB's snapping logic, or the cameras. | `test/` | Regressions there are found by playing. |
+| 9 | No coverage for the planet shaders, the VAB's snapping logic, or the cameras. | `test/` | Regressions there are found by playing. |
+| 10 | The strut and engine collision boxes are much narrower than the tank's (0.5 and 1.0 against 1.5 half-extents), so an assembled rocket is visibly pinched at every interstage and above the engine. | `parts-catalog.ts` | Cosmetic but conspicuous once the models read as real hardware. Widening the boxes changes collision, so it is a gameplay call. |
 
 ---
 
 ## 14. Roadmap and open questions
 
-🔭 **Vision** — this section is a stub for the project owner. Nothing below is decided.
+🔭 **Vision** — mostly a stub for the project owner. One item ([§14.2](#142-the-frogs)) has an answer; everything else is still open.
 
 ### 14.1 Questions that shape everything else
 
@@ -816,9 +845,34 @@ MOON.orbitRadius ──→ SOI radius ──→ and transfer Δv
 
 ❓ **Should failure cost anything?** Currently `F1` is free and instant. A cost would make the build phase matter more and could make the game frustrating.
 
-❓ **Frogs.** The title promises frogs. There are no frogs. Is there a crew concept here, and does anything happen to them on a crash?
+✅ **Frogs — answered.** There will be chibi frogs in space suits. See [§14.2](#142-the-frogs).
 
-### 14.2 Candidate features
+### 14.2 The frogs
+
+🔭 **Vision** — direction set by the project owner; the mechanics below are open.
+
+**Decided:** the crew are frogs. Chibi proportions, space suits.
+
+This is the game's title paying off, and it's the only content decision so far that is about *character* rather than simulation. Everything else in the game is a number the player fights; the frogs are the thing the player is fighting *for*.
+
+**What the existing code already supports.** This lands more cheaply than it looks:
+
+| Need | What's already there |
+| --- | --- |
+| Chibi frog models with no art pipeline | `src/rendering/voxel-model.ts` builds merged, vertex-coloured meshes from a function that fills a voxel grid — exactly how every rocket part is made. Frogs can be voxel models without breaking pillar [§2.4](#24-procedural-everything). |
+| Somewhere for them to live | The Command Pod is already described as *"Crew capsule — required to fly"* ([§5.1](#51-parts-catalog)). It is the natural container, and it's already the required part. |
+| Something to react to their fate | `WinStates.onEvent` fires `orbit` / `moon-landed` / `crash` / `safe-return` and **has no listener** (gap #2). Crew outcomes would be its first real consumer — one open item resolving another. |
+| A place to show them off | `MenuScene` already renders crashed rocket debris on Luna's equator. A frog in that scene is the title screen. |
+
+**Still open:**
+
+❓ **Are they simulated or cosmetic?** A visible crew with a headcount per pod is a different feature from a mascot riding along. Only the first can create stakes.
+
+❓ **What happens to them on a crash?** This is the question that matters most, because it's the same question as *"should failure cost anything?"* above — now with a face on it. A frog is the cheapest possible way to make a wreck land emotionally without adding a resource system or a penalty the player has to manage.
+
+❓ **Do they do anything, or are they cargo?** Reacting to g-force, throttle, or an imminent lithobrake would cost little and give the HUD a second, non-numeric channel for "this is going badly."
+
+### 14.3 Candidate features
 
 Not commitments — a menu to choose from. Roughly ordered by ratio of player-visible value to implementation cost.
 
@@ -834,7 +888,7 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 | A third body | High | Needs the patched-conic model to handle nesting. |
 | Audio | Medium | Now that fonts have set the precedent, this is a smaller step than it was — but settle the [§2.4](#24-procedural-everything) question first. |
 
-### 14.3 Explicit non-goals
+### 14.4 Explicit non-goals
 
 🔭 Proposed, for confirmation — a tech tree, an economy, a campaign, multiplayer, or realistic SI units. Each conflicts with a stated pillar. Recording them here so the question is settled once.
 
@@ -867,5 +921,7 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 
 | Version | Change |
 | --- | --- |
+| 0.3.0 | Recorded the part-model art direction as §5.6 after rebuilding the models at higher resolution; added the uniform-scale and Map-storage invariants, the `RES` tuning entry, the two new rendering test suites, and the catalog-proportion gap. |
+| 0.2.1 | Recorded the answer to the frogs question — chibi frogs in space suits — as §14.2, with the existing code that supports it and the mechanics still open. |
 | 0.2.0 | Revised against the merged GUI/UX overhaul: PAUSED state and validated transitions, settings overlay, component library and theming, Terra impact detection, `crash-detection.ts` thresholds, expanded test suite. Two invariants added; the stale-`Q`-comment gap resolved upstream; the "no external assets" pillar amended for the bundled webfonts. |
 | 0.1.0 | Initial draft. Full as-built specification of v0.4.0 derived from source; vision sections stubbed for the project owner. |
