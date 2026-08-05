@@ -2,6 +2,7 @@ node_modules
 dist
 dist-electron
 release
+preview
 *.local
 
 # tsc should only typecheck (noEmit); never commit compiled JS next to sources

@@ -1,7 +1,7 @@
 // src/entities/part.ts
 import * as THREE from 'three';
 
-export type PartKind = 'pod' | 'tank' | 'engine' | 'winglet' | 'strut';
+export type PartKind = 'pod' | 'tank' | 'engine' | 'winglet' | 'strut' | 'decoupler';
 
 /**
  * An attachment hardpoint on a part. Parts snap together when two nodes with
@@ -29,7 +29,26 @@ export interface PartDef {
   kind: PartKind;
   dryMass: number; // tonnes
   fuel?: number; // units (tanks only)
-  thrust?: number; // kN (engines only)
+  /**
+   * Vacuum thrust, kN (engines only). This is the engine's rating: mass flow is
+   * derived from it and stays constant, so it also sets fuel consumption.
+   */
+  thrust?: number;
+  /**
+   * Thrust at sea level, kN. Air pressure pushes back on the exhaust, so a
+   * nozzle tuned for vacuum loses a lot here and one tuned for sea level loses
+   * little. Defaults to `thrust` — no altitude dependence.
+   *
+   * Because mass flow is fixed by `thrust`, this ALSO sets efficiency: an
+   * engine delivering less thrust for the same flow has a lower exhaust
+   * velocity. Sea-level and vacuum specific impulse fall out of the pair.
+   */
+  thrustSea?: number;
+  /**
+   * Fuel units burned per kN of vacuum thrust per second. Lower is more
+   * efficient: exhaust velocity is `1 / (burnRate × FUEL_DENSITY)`.
+   */
+  burnRate?: number;
   /** Short user-facing description of what this part does. */
   desc: string;
   /** Half-extents of the part's bounding box, used for mesh + collision. */

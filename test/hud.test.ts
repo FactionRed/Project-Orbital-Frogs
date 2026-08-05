@@ -13,6 +13,7 @@ interface StubOpts {
   altitude?: number;
   speed?: number;
   fuel?: number;
+  stageIndex?: number;
   throttle?: number;
   sas?: boolean;
   onMoon?: boolean;
@@ -36,6 +37,9 @@ function stubFlight(o: StubOpts = {}): FlightController {
   const shipPos = { x: r, y: 0, z: 0 };
   return {
     ship: { rootBody: { position: shipPos, velocity: { x: 0, y: speed, z: 0 } }, fuel: o.fuel ?? 1200 },
+    // The gauge reports the LIT stage's fuel, not the whole rocket's.
+    currentStageIndex: o.stageIndex ?? 0,
+    currentStageFuel: () => o.fuel ?? 1200,
     planet,
     moon: o.onMoon ? { ...moon, position: shipPos } : moon,
     throttle: o.throttle ?? 0,

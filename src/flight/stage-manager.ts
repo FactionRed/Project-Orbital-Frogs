@@ -5,17 +5,21 @@ import { getPartDef } from '../entities/parts-catalog';
 export interface Stage {
   engineUids: string[];
   tankUids: string[];
-  /** Uid of the decoupler strut that, when staged, detaches this stage. */
+  /** Uid of the decoupler that, when staged, detaches this stage. */
   decouplerUid?: string;
 }
 
 /**
- * Build the stage list bottom-up. We treat each `strut` part as a potential
- * decoupler that splits stages. The lowest engine+tank group (below the lowest
- * decoupler) is stage 0 (fired first); each subsequent group above is a later stage.
+ * Build the stage list bottom-up. A `decoupler` part is what splits stages: the
+ * lowest engine+tank group (below the lowest decoupler) is stage 0 and fires
+ * first; each group above it is a later stage.
  *
- * Simplified model: walk the attach tree from each engine upward, collecting tanks,
- * stopping at a strut. Group engines that share the same decoupler ancestor.
+ * Struts used to do this job, which meant the part labelled "structural
+ * connector" silently decided the staging and there was no way to brace a
+ * rocket without also cutting it in half. Struts are now purely structural.
+ *
+ * Simplified model: walk the attach tree from each engine upward, collecting
+ * tanks, stopping at a decoupler. Engines sharing a decoupler form one stage.
  */
 export function buildStages(design: ShipDesign): Stage[] {
   const byUid = new Map(design.parts.map((p) => [p.uid, p]));
@@ -23,7 +27,7 @@ export function buildStages(design: ShipDesign): Stage[] {
 
   const engines = design.parts.filter((p) => getPartDef(p.partId).kind === 'engine');
 
-  // For each engine, walk up collecting tanks until a strut or root.
+  // For each engine, walk up collecting tanks until a decoupler or the root.
   const groups = engines.map((eng) => {
     const tanks: string[] = [];
     let decoupler: string | undefined;
@@ -32,7 +36,7 @@ export function buildStages(design: ShipDesign): Stage[] {
       const part = byUid.get(cur);
       if (!part) break;
       if (getPartDef(part.partId).kind === 'tank') tanks.push(cur);
-      if (getPartDef(part.partId).kind === 'strut') {
+      if (getPartDef(part.partId).kind === 'decoupler') {
         decoupler = cur;
         break;
       }

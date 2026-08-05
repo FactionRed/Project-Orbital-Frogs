@@ -54,6 +54,27 @@ export const ATMOSPHERE = {
   dragFactor: 0.1, // combined Cd × A — tuned so Q matters during ascent
 };
 
+/**
+ * Air density at an altitude above Terra's surface, in the same game units as
+ * ATMOSPHERE.surfaceDensity. Zero at or above the top of the atmosphere and
+ * below the surface.
+ *
+ * Single source of truth: drag, the Q readout, and engine thrust all read the
+ * atmosphere through this, so they cannot drift apart.
+ */
+export function airDensityAt(altitude: number): number {
+  if (altitude < 0 || altitude >= ATMOSPHERE.height) return 0;
+  return ATMOSPHERE.surfaceDensity * Math.exp(-altitude / ATMOSPHERE.scaleHeight);
+}
+
+/**
+ * How close to vacuum a given altitude is, 0 at sea level to 1 in space.
+ * Engines interpolate between their sea-level and vacuum thrust on this.
+ */
+export function vacuumFractionAt(altitude: number): number {
+  return 1 - Math.min(1, airDensityAt(altitude) / ATMOSPHERE.surfaceDensity);
+}
+
 // Moon's sphere of influence: a * (m_body / m_parent)^(2/5).
 // Precomputed so all consumers (HUD, win-states, gravity) use the exact same
 // boundary instead of hardcoding an approximation that drifts.

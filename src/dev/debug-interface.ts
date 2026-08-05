@@ -24,6 +24,8 @@ import type { FlightController } from '../flight/flight-controller';
 import type { FlightCamera } from '../flight/flight-camera';
 import type { StateMachine } from '../core/state-machine';
 import type { OrbitMap } from '../ui/orbit-map';
+import type { HoldMode } from '../flight/flight-controller';
+import { getPartDef } from '../entities/parts-catalog';
 
 export interface DebugDeps {
   vab: VabController;
@@ -81,6 +83,7 @@ export function installDebugInterface(deps: DebugDeps): void {
         sas: f.sasEnabled,
         stageIdx: f.currentStageIndex,
         stageCount: f.getStages().length,
+        stageFuel: Math.round(f.currentStageFuel()),
         mapOpen: deps.orbitMap.visible,
         soi: f.dominantBodyFor(rb.position).data.name,
       };
@@ -110,9 +113,40 @@ export function installDebugInterface(deps: DebugDeps): void {
       return `built ${deps.vab.design.parts.length} parts, ready=${deps.vab.isReady()}`;
     },
 
+    /**
+     * Assemble a stack directly from part ids, bottom of the list first at the
+     * top of the rocket. Bypasses pointer-driven placement entirely, which is
+     * the only practical way to build a multi-stage rocket from a script — the
+     * VAB's node snapping depends on where the camera happens to be looking.
+     *
+     *   __game.stack(['pod','tank','engine-vac','decoupler','tank','engine'])
+     */
+    stack(partIds: string[]): string {
+      deps.vab.clear();
+      let y = 0;
+      let parentUid: string | undefined;
+      partIds.forEach((id, i) => {
+        const def = getPartDef(id);
+        if (i > 0) y -= def.size[1];
+        deps.vab.placeAt(id, y, parentUid);
+        parentUid = deps.vab.design.parts[deps.vab.design.parts.length - 1].uid;
+        y -= def.size[1];
+      });
+      return `stacked ${deps.vab.design.parts.length} parts, ready=${deps.vab.isReady()}`;
+    },
+
     clear(): string {
       deps.vab.clear();
       return 'cleared';
+    },
+
+    /** Set the attitude-hold mode: off, prograde, retrograde, normal, ... */
+    hold(mode: string): string {
+      const f = deps.flight();
+      if (!f) return 'no flight';
+      f.holdMode = mode as HoldMode;
+      if (mode !== 'off') f.sasEnabled = false;
+      return `hold=${mode}`;
     },
 
     // Place a specific part at center
@@ -217,10 +251,10 @@ export function installDebugInterface(deps: DebugDeps): void {
 
     help(): string {
       return [
-        'Methods: fsm() state() snapshot() build() clear() place(id) launch()',
-        'stage() throttle(0..1) sas() map() zoom(±n) revert()',
+        'Methods: fsm() state() snapshot() build() stack([ids]) clear() place(id) launch()',
+        'stage() throttle(0..1) sas() hold(mode) map() zoom(±n) revert()',
         'dragRight(dx,dy) dragLeft(dx,dy)',
-        'Parts: pod tank engine winglet strut',
+        'Parts: pod tank engine engine-vac decoupler winglet strut',
       ].join(' | ');
     },
   };
