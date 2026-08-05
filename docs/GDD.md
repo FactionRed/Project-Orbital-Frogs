@@ -5,9 +5,9 @@ document:   Game Design Document (GDD)
 project:    Project Orbital Frogs
 repository: FactionRed/Project-Orbital-Frogs
 game_version: 0.4.0
-doc_version:  0.2.0
+doc_version:  0.2.1
 doc_status:   as-built specification + stubbed vision
-last_verified_against: 27d2114
+last_verified_against: e208426
 ```
 
 > **Related documents.** `docs/superpowers/specs/2026-07-18-gui-ux-overhaul-design.md` is the visual design spec for the interface; `docs/superpowers/plans/2026-07-18-gui-ux-overhaul.md` is the implementation plan it was built from. This GDD covers what the game *is*; those cover what the interface *looks like*.
@@ -111,7 +111,7 @@ No textures, no models, no audio files. Parts are voxel meshes built in code (`s
 
 **This pillar has one exception.** The interface overhaul added three webfonts (`public/fonts/` — VT323 and IBM Plex Mono) to carry the vintage-terminal look. They are the first non-procedural assets in the project.
 
-❓ **Open question:** is the pillar "no external assets" or "no external *art* assets"? The answer decides whether audio is admissible later. See [§14.2](#142-candidate-features).
+❓ **Open question:** is the pillar "no external assets" or "no external *art* assets"? The answer decides whether audio is admissible later. See [§14.3](#143-candidate-features).
 
 ### 2.5 The build is the difficulty curve
 
@@ -157,7 +157,7 @@ The loop is **build → fly → fail → diagnose → rebuild**. The reward for 
 
 ✅ **As-built:** there is **none**. Every session starts from an empty VAB. Ship designs are not saved, milestones are not recorded between launches, and the only persisted state in the entire game is whether the help overlay is visible (`localStorage.hintsVisible`, `src/main.ts`).
 
-🔭 **Vision:** see [§14.2](#142-candidate-features).
+🔭 **Vision:** see [§14.3](#143-candidate-features).
 
 ---
 
@@ -804,7 +804,7 @@ MOON.orbitRadius ──→ SOI radius ──→ and transfer Δv
 
 ## 14. Roadmap and open questions
 
-🔭 **Vision** — this section is a stub for the project owner. Nothing below is decided.
+🔭 **Vision** — mostly a stub for the project owner. One item ([§14.2](#142-the-frogs)) has an answer; everything else is still open.
 
 ### 14.1 Questions that shape everything else
 
@@ -816,9 +816,34 @@ MOON.orbitRadius ──→ SOI radius ──→ and transfer Δv
 
 ❓ **Should failure cost anything?** Currently `F1` is free and instant. A cost would make the build phase matter more and could make the game frustrating.
 
-❓ **Frogs.** The title promises frogs. There are no frogs. Is there a crew concept here, and does anything happen to them on a crash?
+✅ **Frogs — answered.** There will be chibi frogs in space suits. See [§14.2](#142-the-frogs).
 
-### 14.2 Candidate features
+### 14.2 The frogs
+
+🔭 **Vision** — direction set by the project owner; the mechanics below are open.
+
+**Decided:** the crew are frogs. Chibi proportions, space suits.
+
+This is the game's title paying off, and it's the only content decision so far that is about *character* rather than simulation. Everything else in the game is a number the player fights; the frogs are the thing the player is fighting *for*.
+
+**What the existing code already supports.** This lands more cheaply than it looks:
+
+| Need | What's already there |
+| --- | --- |
+| Chibi frog models with no art pipeline | `src/rendering/voxel-model.ts` builds merged, vertex-coloured meshes from a function that fills a voxel grid — exactly how every rocket part is made. Frogs can be voxel models without breaking pillar [§2.4](#24-procedural-everything). |
+| Somewhere for them to live | The Command Pod is already described as *"Crew capsule — required to fly"* ([§5.1](#51-parts-catalog)). It is the natural container, and it's already the required part. |
+| Something to react to their fate | `WinStates.onEvent` fires `orbit` / `moon-landed` / `crash` / `safe-return` and **has no listener** (gap #2). Crew outcomes would be its first real consumer — one open item resolving another. |
+| A place to show them off | `MenuScene` already renders crashed rocket debris on Luna's equator. A frog in that scene is the title screen. |
+
+**Still open:**
+
+❓ **Are they simulated or cosmetic?** A visible crew with a headcount per pod is a different feature from a mascot riding along. Only the first can create stakes.
+
+❓ **What happens to them on a crash?** This is the question that matters most, because it's the same question as *"should failure cost anything?"* above — now with a face on it. A frog is the cheapest possible way to make a wreck land emotionally without adding a resource system or a penalty the player has to manage.
+
+❓ **Do they do anything, or are they cargo?** Reacting to g-force, throttle, or an imminent lithobrake would cost little and give the HUD a second, non-numeric channel for "this is going badly."
+
+### 14.3 Candidate features
 
 Not commitments — a menu to choose from. Roughly ordered by ratio of player-visible value to implementation cost.
 
@@ -834,7 +859,7 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 | A third body | High | Needs the patched-conic model to handle nesting. |
 | Audio | Medium | Now that fonts have set the precedent, this is a smaller step than it was — but settle the [§2.4](#24-procedural-everything) question first. |
 
-### 14.3 Explicit non-goals
+### 14.4 Explicit non-goals
 
 🔭 Proposed, for confirmation — a tech tree, an economy, a campaign, multiplayer, or realistic SI units. Each conflicts with a stated pillar. Recording them here so the question is settled once.
 
@@ -867,5 +892,6 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 
 | Version | Change |
 | --- | --- |
+| 0.2.1 | Recorded the answer to the frogs question — chibi frogs in space suits — as §14.2, with the existing code that supports it and the mechanics still open. |
 | 0.2.0 | Revised against the merged GUI/UX overhaul: PAUSED state and validated transitions, settings overlay, component library and theming, Terra impact detection, `crash-detection.ts` thresholds, expanded test suite. Two invariants added; the stale-`Q`-comment gap resolved upstream; the "no external assets" pillar amended for the bundled webfonts. |
 | 0.1.0 | Initial draft. Full as-built specification of v0.4.0 derived from source; vision sections stubbed for the project owner. |
