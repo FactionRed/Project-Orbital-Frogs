@@ -5,9 +5,9 @@ document:   Game Design Document (GDD)
 project:    Project Orbital Frogs
 repository: FactionRed/Project-Orbital-Frogs
 game_version: 0.4.0
-doc_version:  0.3.0
+doc_version:  0.3.1
 doc_status:   as-built specification + stubbed vision
-last_verified_against: e208426
+last_verified_against: 2023cd7
 ```
 
 > **Related documents.** `docs/superpowers/specs/2026-07-18-gui-ux-overhaul-design.md` is the visual design spec for the interface; `docs/superpowers/plans/2026-07-18-gui-ux-overhaul.md` is the implementation plan it was built from. This GDD covers what the game *is*; those cover what the interface *looks like*.
@@ -299,6 +299,16 @@ Two rules govern every model:
 **Geometry is cached per catalog part** and shared across every mesh; materials are not, because callers tint individual meshes (the placement ghost, VAB selection highlighting). Without the cache, every placed part, every ghost, and every piece of menu debris would rebuild tens of thousands of voxels.
 
 Shapes are composed by layering: a later shape recolours the voxels it covers, and passing `CARVE` instead of a colour removes them, which is how hollow forms like the nozzle throat are made.
+
+**Previewing a change.** `npm run preview:parts` renders every part and an assembled two-stage rocket to `preview/*.png` in a headless browser, and prints the triangle count per part.
+
+```
+pod 7372  tank 22276  engine 5092  winglet 2468  strut 9952 | 47160 tris total
+```
+
+This exists because the models are the one area with no meaningful automated check on the *result*. The tests can assert that a part fits its collision box and scales uniformly; they cannot assert that it looks like an engine. Look at the output before and after any model change — the winglet spent a release as a flat sliver because nobody had a reason to view it in isolation, and the pod went through three passes of looking like laboratory glassware before its proportions were right.
+
+The tool needs a Chromium. It checks `$CHROME_PATH`, then Playwright's own download, then `$PLAYWRIGHT_BROWSERS_PATH`, then the usual system locations, and tells you how to get one if it finds nothing. Rendering is via SwiftShader, so it works on a machine with no GPU.
 
 ---
 
@@ -624,6 +634,9 @@ src/
 ├── styles/                  tokens, base, components, screens/*.css
 ├── rendering/               procedural-planet, voxel-model, part-models
 └── dev/debug-interface.ts   window.__game — see §11
+
+tools/
+└── preview-parts.*          Offline model renderer — see §5.6
 ```
 
 ★ = the three files that contain essentially all the game's tuning.
@@ -683,6 +696,7 @@ Still uncovered: the procedural planet shaders, the VAB controller's snapping lo
 | `npm run dev` | Vite dev server, http://localhost:5173 |
 | `npm test` | Vitest, single run |
 | `npm run build` | `tsc` typecheck + Vite bundle to `dist/` |
+| `npm run preview:parts` | Render the part models to `preview/*.png` — see [§5.6](#56-part-models-and-art-direction) |
 | `npm run build:exe` | Windows portable `.exe` via electron-builder |
 
 The Electron plugin is **skipped when `VITEST` is set** — it rewrites module resolution in a way that breaks the vitest worker.
@@ -921,6 +935,7 @@ Not commitments — a menu to choose from. Roughly ordered by ratio of player-vi
 
 | Version | Change |
 | --- | --- |
+| 0.3.1 | Documented `npm run preview:parts`, the offline model renderer, in §5.6 and the command table. |
 | 0.3.0 | Recorded the part-model art direction as §5.6 after rebuilding the models at higher resolution; added the uniform-scale and Map-storage invariants, the `RES` tuning entry, the two new rendering test suites, and the catalog-proportion gap. |
 | 0.2.1 | Recorded the answer to the frogs question — chibi frogs in space suits — as §14.2, with the existing code that supports it and the mechanics still open. |
 | 0.2.0 | Revised against the merged GUI/UX overhaul: PAUSED state and validated transitions, settings overlay, component library and theming, Terra impact detection, `crash-detection.ts` thresholds, expanded test suite. Two invariants added; the stale-`Q`-comment gap resolved upstream; the "no external assets" pillar amended for the bundled webfonts. |
