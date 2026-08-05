@@ -2,7 +2,12 @@
 import type { FlightController } from '../flight/flight-controller';
 import { isClosedOrbit } from '../physics/orbit-math';
 import { MOON_SOI } from '../physics/constants';
-import { isCrashImpact, IMPACT_CRASH_THRESHOLD } from '../flight/crash-detection';
+import {
+  isCrashImpact,
+  IMPACT_CRASH_THRESHOLD,
+  SURFACE_CONTACT_ALT,
+  SURFACE_PENETRATION_TOLERANCE,
+} from '../flight/crash-detection';
 import { Banner } from './components';
 import type { BannerTone } from './components';
 
@@ -65,21 +70,32 @@ export class WinStates {
       this.onEvent('orbit');
     }
 
-    // Moon landed: in moon SOI, very low radial speed, close to surface.
+    if (inMoonSoi) this.wasInMoonSoi = true;
+
+    // Landing and impact are decided from one set of moon-relative numbers, so a
+    // single position can never satisfy both.
+    //
+    // `moonAlt` is measured from Luna's center, so it goes NEGATIVE inside the
+    // body: wreckage buried under the surface must not read as a gentle
+    // touchdown merely because it has come to rest.
+    //
     // "Vertical speed" is the component of velocity along the radial direction
     // from moon center to ship — NOT world-Y, because the moon orbits in the
     // XZ plane and its surface normal can point in any direction.
-    if (inMoonSoi && !this.achieved.has('moon-landed')) {
-      this.wasInMoonSoi = true;
-      const moonAlt = moonDist - flight.moon.data.radius;
-      const moonDx = root.position.x - moonPos.x;
-      const moonDy = root.position.y - moonPos.y;
-      const moonDz = root.position.z - moonPos.z;
-      const radialVel = moonDist > 1e-3
-        ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
-        : 0;
-      const vertSpeed = Math.abs(radialVel);
-      if (moonAlt < 50 && vertSpeed < IMPACT_CRASH_THRESHOLD) {
+    const moonAlt = moonDist - flight.moon.data.radius;
+    const moonDx = root.position.x - moonPos.x;
+    const moonDy = root.position.y - moonPos.y;
+    const moonDz = root.position.z - moonPos.z;
+    const radialVel = moonDist > 1e-3
+      ? (root.velocity.x * moonDx + root.velocity.y * moonDy + root.velocity.z * moonDz) / moonDist
+      : 0;
+    const vertSpeed = Math.abs(radialVel);
+    const onMoonSurface =
+      moonAlt >= -SURFACE_PENETRATION_TOLERANCE && moonAlt < SURFACE_CONTACT_ALT;
+
+    // Moon landed: in moon SOI, on the surface, very low radial speed.
+    if (inMoonSoi && onMoonSurface && vertSpeed < IMPACT_CRASH_THRESHOLD) {
+      if (!this.achieved.has('moon-landed')) {
         this.achieved.add('moon-landed');
         this.show('🌕 LUNAR LANDING', 'success');
         this.onEvent('moon-landed');
@@ -89,16 +105,9 @@ export class WinStates {
     // Crashed into either body.
     const planetAlt = Math.hypot(r[0], r[1], r[2]) - planet.data.radius;
     // Moon crash: inside the moon OR at the surface with high radial speed.
-    const moonAltitude = moonDist - flight.moon.data.radius;
-    const moonDx2 = root.position.x - moonPos.x;
-    const moonDy2 = root.position.y - moonPos.y;
-    const moonDz2 = root.position.z - moonPos.z;
-    const moonRadialVel = moonDist > 1e-3
-      ? (root.velocity.x * moonDx2 + root.velocity.y * moonDy2 + root.velocity.z * moonDz2) / moonDist
-      : 0;
     const moonCrashed = inMoonSoi && (
-      moonDist < flight.moon.data.radius - 10 ||
-      (moonAltitude < 50 && Math.abs(moonRadialVel) >= IMPACT_CRASH_THRESHOLD)
+      moonAlt < -SURFACE_PENETRATION_TOLERANCE ||
+      (onMoonSurface && vertSpeed >= IMPACT_CRASH_THRESHOLD)
     );
 
     // Critical #1: hitting Terra used to be silent. The altitude test never
@@ -109,7 +118,7 @@ export class WinStates {
       && flight.peakImpactBody === 'planet'
       && isCrashImpact(flight.peakImpactSpeed);
 
-    if (planetAlt < -10 || moonCrashed || planetImpactCrash) {
+    if (planetAlt < -SURFACE_PENETRATION_TOLERANCE || moonCrashed || planetImpactCrash) {
       if (!this.achieved.has('crash')) {
         this.achieved.add('crash');
         const speed = Math.max(flight.peakImpactSpeed, 0);
