@@ -1,0 +1,117 @@
+/* src/styles/tokens.css — all design tokens. No other CSS file may define colors directly. */
+:root {
+  /* Typography */
+  --font-display: 'VT323', 'IBM Plex Mono', monospace;
+  --font-body: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --fs-readout: 32px;
+  --fs-label: 12px;
+  --fs-body: 14px;
+  --tracking-mono: 0.08em;
+
+  /* Spacing (4px base, rem-based for scaling) */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+
+  /* Radii */
+  --r-bezel: 2px;
+  --r-key: 1px;
+
+  /* Motion */
+  --t-fast: 80ms;
+  --t-med: 160ms;
+  --t-scanline-drift: 8s;
+  --t-toast: 4s;
+
+  /* CRT effect flags (swapped by theme) */
+  --crt-scanlines: 0;
+  --crt-bloom: 0;
+  --crt-flicker: 0;
+
+  /* Effect colors. Kept here (not in base.css) so tokens.css stays the single
+     place any color literal may appear.
+
+     The stripe is DERIVED from --crt-scanlines rather than set alongside it.
+     var() inside a custom property resolves per element, so every rule that
+     turns the flag off also blanks the stripe — one switch instead of two
+     that can drift apart. */
+  --scanline-stripe: rgba(0, 0, 0, calc(0.15 * var(--crt-scanlines)));
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  /* Orbit-map marker colors. Theme-independent: the 3D scene is not themed, so
+     the legend swatches must stay identical to the marker meshes in
+     orbit-map.ts (MARKER_COLORS). */
+  --map-ap: #ff5a5a;
+  --map-pe: #5ad1ff;
+}
+
+/* Modern theme: crisp, high-contrast, no CRT effects. Default. */
+[data-theme='modern'] {
+  --ink: #d8e4d0;
+  --ink-dim: #9aa89a;
+  --ink-faint: #5a6a5a;
+  --amber: #ffae42;
+  --warn: #ffd23f;
+  --green: #6bd96b;
+  --red: #ff5a5a;
+  --cyan: #5ad1ff;
+  --phosphor-bg: #0a0f0a;
+  --panel-bg: rgba(12, 18, 12, 0.85);
+  --panel-border: #2a3a2a;
+  --grid-line: rgba(120, 160, 120, 0.15);
+  --glow-phosphor: none;
+}
+
+/* Vintage theme: amber phosphor on black, CRT scanlines + bloom + flicker. */
+[data-theme='vintage'] {
+  --ink: #ffb86b;
+  --ink-dim: #c89a55;
+  --ink-faint: #7a5d33;
+  --amber: #ffae42;
+  --warn: #ffd23f;
+  --green: #88dd66;
+  --red: #ff6a3d;
+  --cyan: #ffc870;
+  --phosphor-bg: #0a0805;
+  --panel-bg: rgba(16, 10, 4, 0.88);
+  --panel-border: #5a3a1a;
+  --grid-line: rgba(255, 174, 66, 0.18);
+  --glow-phosphor: 0 0 6px var(--amber);
+  --crt-scanlines: 1;
+  --crt-bloom: 1;
+  --crt-flicker: 1;
+}
+
+/* Reduced motion: suppress ALL motion regardless of chosen theme.
+ *
+ * The selector must list [data-theme] as well as :root. theme.ts stamps
+ * data-theme on BOTH <html> and <body>, and <body> is not :root — so a
+ * :root-only block here leaves the vintage values standing on <body>, which is
+ * the element the scanline overlay (body[data-theme='vintage']::before)
+ * actually reads. Equal specificity to the theme blocks, later in source
+ * order, so these win on every element that carries the attribute. */
+@media (prefers-reduced-motion: reduce) {
+  :root, [data-theme] {
+    --crt-flicker: 0;
+    --crt-scanlines: 0;
+    --t-scanline-drift: 0s;
+  }
+}
+
+/* Explicit user override, stamped on <html>/<body> by theme.ts. It must come
+ * after the media query and win in BOTH directions: a media query cannot be
+ * overridden from JS, so without these rules the settings toggle is dead on a
+ * machine whose OS already asks for reduced motion. */
+[data-reduced-motion='on'] {
+  --crt-flicker: 0;
+  --crt-scanlines: 0;
+  --t-scanline-drift: 0s;
+}
+[data-theme='vintage'][data-reduced-motion='off'] {
+  --crt-flicker: 1;
+  --crt-scanlines: 1;
+  --t-scanline-drift: 8s;
+}

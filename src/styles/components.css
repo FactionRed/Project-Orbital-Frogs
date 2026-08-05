@@ -1,0 +1,206 @@
+/* src/styles/components.css — all 8 component classes. Consumes only tokens. */
+
+/* ---- Panel ---- */
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  backdrop-filter: blur(4px);
+  padding: var(--sp-3);
+  position: relative;
+}
+.panel[data-label]::before {
+  content: attr(data-label);
+  position: absolute;
+  top: -8px;
+  left: var(--sp-3);
+  background: var(--phosphor-bg);
+  padding: 0 var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-label);
+  color: var(--ink-dim);
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+}
+
+/* ---- Readout ---- */
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-family: var(--font-body);
+}
+.readout__label {
+  font-size: var(--fs-label);
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  min-width: 2.5rem;
+}
+.readout__value {
+  font-family: var(--font-display);
+  font-size: var(--fs-readout);
+  color: var(--ink);
+  text-shadow: var(--glow-phosphor);
+  line-height: 1;
+}
+.readout__unit {
+  font-size: var(--fs-label);
+  color: var(--ink-dim);
+}
+.readout[data-state='nominal'] .readout__value::before { content: '● '; color: var(--green); }
+.readout[data-state='caution'] .readout__value::before { content: '▲ '; color: var(--warn); }
+.readout[data-state='alarm']    .readout__value { color: var(--red); }
+.readout[data-state='alarm']    .readout__value::before { content: '■ '; color: var(--red); }
+
+/* ---- DSKY key (button) ---- */
+.dsky-key {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-key);
+  color: var(--ink);
+  font-family: var(--font-body);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 5rem;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.dsky-key:hover { border-color: var(--amber); }
+.dsky-key:active, .dsky-key[data-active] {
+  background: var(--amber);
+  color: var(--phosphor-bg);
+  border-color: var(--amber);
+  box-shadow: inset 0 0 0 1px var(--phosphor-bg);
+}
+.dsky-key:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--ink-faint);
+}
+.dsky-key:disabled:hover { border-color: var(--ink-faint); }
+.dsky-key__word { font-size: var(--fs-body); letter-spacing: var(--tracking-mono); }
+.dsky-key__hint { font-size: var(--fs-label); color: var(--ink-dim); letter-spacing: 0; }
+.dsky-key:active .dsky-key__hint, .dsky-key[data-active] .dsky-key__hint { color: var(--phosphor-bg); }
+
+/* ---- Toggle switch ---- */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { display: none; }
+.toggle__track {
+  width: 36px;
+  height: 16px;
+  background: var(--phosphor-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-key);
+  position: relative;
+  transition: border-color var(--t-fast);
+}
+.toggle__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  background: var(--ink-dim);
+  transition: transform var(--t-fast), background var(--t-fast);
+}
+.toggle input:checked + .toggle__track { border-color: var(--green); }
+.toggle input:checked + .toggle__track .toggle__thumb {
+  transform: translateX(20px);
+  background: var(--green);
+}
+
+/* ---- Gauge ---- */
+.gauge { display: inline-block; }
+.gauge__svg { display: block; }
+.gauge__value {
+  font-family: var(--font-display);
+  font-size: var(--fs-label);
+  color: var(--ink-dim);
+  text-align: center;
+}
+.gauge[data-kind='bar'] .gauge__svg { width: 100%; height: 8px; }
+.gauge[data-kind='arc']  .gauge__svg { width: 60px; height: 60px; }
+
+/* ---- Banner (full-width event) ---- */
+.banner {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: none;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  padding: var(--sp-4) var(--sp-5);
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+.banner[data-tone='success'] { border-color: var(--green); }
+.banner[data-tone='info']    { border-color: var(--cyan); }
+.banner[data-tone='alarm']   { border-color: var(--red); }
+.banner__headline {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--ink);
+  text-shadow: var(--glow-phosphor);
+}
+.banner[data-tone='alarm'] .banner__headline { color: var(--red); animation: banner-pulse 1.2s ease-in-out infinite; }
+.banner[data-tone='success'] .banner__headline { color: var(--green); }
+@keyframes banner-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.banner__detail { font-family: var(--font-body); font-size: var(--fs-label); color: var(--ink-dim); margin-top: var(--sp-1); }
+@media (prefers-reduced-motion: reduce) {
+  .banner[data-tone='alarm'] .banner__headline { animation: none; }
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  top: var(--sp-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: none;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-bezel);
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  color: var(--ink);
+  backdrop-filter: blur(4px);
+}
+.toast[data-tone='info']    { border-color: var(--cyan); }
+.toast[data-tone='caution'] { border-color: var(--warn); }
+.toast[data-tone='alarm']   { border-color: var(--red); }
+
+/* ---- Tooltip ---- */
+.tooltip {
+  position: fixed;
+  z-index: 200;
+  display: none;
+  background: var(--phosphor-bg);
+  border: 1px solid var(--amber);
+  border-radius: var(--r-key);
+  padding: var(--sp-1) var(--sp-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-label);
+  color: var(--ink);
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.tooltip[data-visible] { display: block; }

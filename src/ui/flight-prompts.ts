@@ -1,60 +1,69 @@
 // src/ui/flight-prompts.ts
 import type { FlightController } from '../flight/flight-controller';
+import { Toast } from './components';
 
 /**
  * Contextual on-screen prompts during flight:
- * 1. "Press Space to ignite" — shown after launch until the first stage fires.
- * 2. "No fuel remaining — press F1 to revert" — shown when fuel hits 0 and no
- *    orbit/win event has been achieved, so the player isn't left guessing.
+ * 1. "Press SPACE to ignite" — shown after launch until the first stage fires.
+ * 2. "No fuel remaining" — shown when fuel hits 0 and no orbit/win event has
+ *    been achieved, so the player isn't left guessing. Tone is caution while a
+ *    later stage can still fire, alarm once nothing is left to burn.
  */
 export class FlightPrompts {
-  private ignitePrompt: HTMLElement;
-  private fuelPrompt: HTMLElement;
+  private ignite: Toast;
+  private fuel: Toast;
   private firstStageFired = false;
 
   constructor() {
-    this.ignitePrompt = document.createElement('div');
-    this.ignitePrompt.id = 'flight-prompt';
-    this.ignitePrompt.innerHTML = 'Press <kbd>Space</kbd> to ignite · throttle up gently, pitch east after ~300m';
-    document.body.appendChild(this.ignitePrompt);
-
-    this.fuelPrompt = document.createElement('div');
-    this.fuelPrompt.id = 'fuel-prompt';
-    this.fuelPrompt.innerHTML = 'No fuel remaining — press <kbd>F1</kbd> to revert and rebuild';
-    document.body.appendChild(this.fuelPrompt);
+    this.ignite = new Toast();
+    this.ignite.el.id = 'flight-prompt';
+    this.fuel = new Toast();
+    this.fuel.el.id = 'fuel-prompt';
+    // One stack owns the screen position so the toasts flow instead of being
+    // placed at hand-tuned offsets that a wrapped line can overrun.
+    const stack = document.createElement('div');
+    stack.id = 'toast-stack';
+    stack.append(this.ignite.el, this.fuel.el);
+    document.body.appendChild(stack);
   }
 
   /** Called on launch — reset state and show the ignite prompt. */
   reset(): void {
     this.firstStageFired = false;
-    this.ignitePrompt.style.display = 'block';
-    this.fuelPrompt.style.display = 'none';
+    // durationMs 0: these stay until the situation they describe resolves.
+    this.ignite.show('Press SPACE to ignite · throttle up gently, pitch east after ~300m', 'info', 0);
+    this.fuel.hide();
   }
 
   /** Called each physics step during flight. */
   update(flight: FlightController): void {
-    // Hide ignite prompt once the user fires their first stage (throttle > 0
+    // Hide the ignite prompt once the user fires their first stage (throttle > 0
     // after having fuel, or staging has advanced).
-    if (!this.firstStageFired) {
-      if (flight.throttle > 0 || flight.currentStageIndex > 0) {
-        this.firstStageFired = true;
-        this.ignitePrompt.style.display = 'none';
-      }
+    if (!this.firstStageFired && (flight.throttle > 0 || flight.currentStageIndex > 0)) {
+      this.firstStageFired = true;
+      this.ignite.hide();
     }
 
-    // Show fuel-out prompt when fuel is 0 and the user has already tried to
+    // Show the fuel-out prompt when fuel is 0 and the user has already tried to
     // fly (staged or throttled). Don't show it on the pad before first ignition
-    // (the ignite prompt covers that case).
+    // — the ignite prompt covers that case.
     const hasAttempted = this.firstStageFired || flight.currentStageIndex > 0;
     if (hasAttempted && flight.ship.fuel <= 0) {
-      this.fuelPrompt.style.display = 'block';
+      const hasLaterStage = flight.currentStageIndex < flight.getStages().length - 1;
+      this.fuel.show(
+        hasLaterStage
+          ? 'No fuel in this stage — press SPACE to stage, or F1 to revert'
+          : 'No fuel remaining — press F1 to revert and rebuild',
+        hasLaterStage ? 'caution' : 'alarm',
+        0,
+      );
     } else {
-      this.fuelPrompt.style.display = 'none';
+      this.fuel.hide();
     }
   }
 
   hide(): void {
-    this.ignitePrompt.style.display = 'none';
-    this.fuelPrompt.style.display = 'none';
+    this.ignite.hide();
+    this.fuel.hide();
   }
 }

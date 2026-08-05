@@ -1,9 +1,21 @@
 // src/ui/orbit-map.ts
 import * as THREE from 'three';
 import type { FlightController } from '../flight/flight-controller';
+import { Panel, Readout } from './components';
 
 const TRAJECTORY_STEPS = 2100;
 const TRAJECTORY_DT = 0.5;
+
+/**
+ * Apsis marker colors. These must stay in step with the --map-ap / --map-pe
+ * tokens, which color the on-screen legend — the legend is a lie otherwise.
+ * The 3D scene carries no theme, so these are fixed rather than per-theme.
+ */
+const MARKER_COLORS = { ap: 0xff5a5a, pe: 0x5ad1ff, ship: 0x44ddff } as const;
+
+/** Body name labels drawn in the 3D map. */
+const LABEL_COLOR = '#d8e4d0';
+const LABEL_CANVAS = { w: 256, h: 64 } as const;
 
 /**
  * 3D orbital map view — player-centered.
@@ -17,7 +29,11 @@ const TRAJECTORY_DT = 0.5;
 export class OrbitMap {
   visible = false;
   private overlay: HTMLElement;
-  private apPeText: HTMLElement;
+  private apReadout: Readout;
+  private peReadout: Readout;
+  private bodyReadout: Readout;
+  /** TERRA / LUNA name plates, added with the map and disposed with it. */
+  private bodyLabels: THREE.Sprite[] = [];
   // Persistent objects — created once, updated in-place each frame (no per-frame
   // create/dispose cycle which caused flicker during zoom).
   private trajectoryLine: THREE.Line | null = null;
@@ -37,29 +53,33 @@ export class OrbitMap {
   private lastY = 0;
 
   constructor(private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
-    this.overlay = document.createElement('div');
+    const panel = new Panel('ORBITAL TRACK');
+    this.overlay = panel.el;
     this.overlay.id = 'map-overlay';
-    Object.assign(this.overlay.style, {
-      position: 'absolute',
-      left: '12px',
-      top: '12px',
-      color: '#8fa',
-      font: '12px monospace',
-      background: 'rgba(0,0,10,0.7)',
-      border: '1px solid #2a4',
-      borderRadius: '4px',
-      padding: '6px 10px',
-      zIndex: '20',
-      display: 'none',
-      pointerEvents: 'none',
-    } as Partial<CSSStyleDeclaration>);
-    this.overlay.innerHTML = `
-      <div id="map-title" style="color:#8fa;font-weight:bold;margin-bottom:4px">MAP — following ship</div>
-      <div id="map-appe" style="color:#ffd700">Ap/Pe: —</div>
-      <div id="map-help" style="color:#7a8aa5">drag rotate · wheel zoom · M close</div>
-    `;
+    this.overlay.style.display = 'none';
+    this.overlay.setAttribute('role', 'region');
+    this.overlay.setAttribute('aria-label', 'Orbital track');
+
+    this.apReadout = new Readout('Ap', 'm');
+    this.peReadout = new Readout('Pe', 'm');
+    this.bodyReadout = new Readout('BODY');
+    this.bodyReadout.el.classList.add('readout--compact');
+
+    const legend = document.createElement('div');
+    legend.className = 'ap-pe-legend';
+    for (const [cls, text] of [['legend-ap', 'Ap'], ['legend-pe', 'Pe']] as const) {
+      const item = document.createElement('span');
+      item.className = cls;
+      item.textContent = `● ${text}`;
+      legend.appendChild(item);
+    }
+
+    const help = document.createElement('div');
+    help.className = 'orbit-help';
+    help.textContent = 'drag rotate · wheel zoom · M close';
+
+    this.overlay.append(this.apReadout.el, this.peReadout.el, this.bodyReadout.el, legend, help);
     document.body.appendChild(this.overlay);
-    this.apPeText = this.overlay.querySelector('#map-appe')!;
   }
 
   /** Mouse handlers — attached only while the map is open to avoid stealing flight input. */
@@ -112,11 +132,12 @@ export class OrbitMap {
   toggle(dom: HTMLElement, flight?: FlightController): void {
     this.visible = !this.visible;
     if (this.visible) {
-      this.overlay.style.display = 'block';
+      this.overlay.style.display = 'flex'; // column stack, see orbit-map.css
       this.attachControls(dom);
       if (flight) {
         this.recomputeTrajectory(flight);
         this.createShipMarker();
+        this.createBodyLabels(flight);
         // Snap initial distance to something sensible based on ship altitude.
         const shipPos = flight.ship.rootBody.position;
         const alt = Math.hypot(shipPos.x, shipPos.y, shipPos.z);
@@ -156,6 +177,9 @@ export class OrbitMap {
     if (this.shipMarker) {
       this.shipMarker.position.set(sp.x, sp.y, sp.z);
     }
+
+    // Bodies move (the moon orbits), so re-seat their labels each frame.
+    this.updateBodyLabels(flight);
 
     // Scale markers smoothly based on current zoom (no recreate flicker).
     this.updateMarkerScales();
@@ -219,11 +243,11 @@ export class OrbitMap {
     }
 
     // Update marker positions and scales in-place.
-    this.ensureMarker(this.apMarker, 0xff4444);
+    this.ensureMarker(this.apMarker, MARKER_COLORS.ap);
     if (this.lastCreatedMarker) this.apMarker = this.lastCreatedMarker;
     if (this.apMarker) this.apMarker.position.set(apX, apY, apZ);
 
-    this.ensureMarker(this.peMarker, 0x4444ff);
+    this.ensureMarker(this.peMarker, MARKER_COLORS.pe);
     if (this.lastCreatedMarker) this.peMarker = this.lastCreatedMarker;
     if (this.peMarker) this.peMarker.position.set(peX, peY, peZ);
   }
@@ -259,9 +283,46 @@ export class OrbitMap {
       (this.shipMarker.material as THREE.Material).dispose();
     }
     const geom = new THREE.SphereGeometry(1, 8, 8);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x44ddff });
+    const mat = new THREE.MeshBasicMaterial({ color: MARKER_COLORS.ship });
     this.shipMarker = new THREE.Mesh(geom, mat);
     this.scene.add(this.shipMarker);
+  }
+
+  /** Name plates for Terra and Luna, so the two grey spheres are tellable apart. */
+  private createBodyLabels(flight: FlightController): void {
+    this.clearBodyLabels();
+    for (const body of [flight.planet, flight.moon]) {
+      const sprite = makeLabelSprite(body.data.name.toUpperCase());
+      sprite.userData.bodyRadius = body.data.radius;
+      this.scene.add(sprite);
+      this.bodyLabels.push(sprite);
+    }
+    this.updateBodyLabels(flight);
+  }
+
+  /** Re-seat each label above its body and keep it legible at any zoom. */
+  private updateBodyLabels(flight: FlightController): void {
+    if (this.bodyLabels.length === 0) return;
+    const bodies = [flight.planet, flight.moon];
+    // Screen-stable size: labels scale with view distance, like the markers.
+    const width = Math.max(600, this.mapDistance * 0.06);
+    const height = width * (LABEL_CANVAS.h / LABEL_CANVAS.w);
+    for (let i = 0; i < this.bodyLabels.length && i < bodies.length; i++) {
+      const label = this.bodyLabels[i];
+      const b = bodies[i];
+      label.position.set(b.position.x, b.position.y + b.data.radius * 1.15 + height, b.position.z);
+      label.scale.set(width, height, 1);
+    }
+  }
+
+  private clearBodyLabels(): void {
+    for (const label of this.bodyLabels) {
+      this.scene.remove(label);
+      const mat = label.material as THREE.SpriteMaterial;
+      mat.map?.dispose();
+      mat.dispose();
+    }
+    this.bodyLabels = [];
   }
 
   private clearTrajectory(): void {
@@ -288,6 +349,7 @@ export class OrbitMap {
 
   private clearAll(): void {
     this.clearTrajectory();
+    this.clearBodyLabels();
     if (this.shipMarker) {
       this.scene.remove(this.shipMarker);
       this.shipMarker.geometry.dispose();
@@ -307,7 +369,7 @@ export class OrbitMap {
     const v = Math.hypot(root.velocity.x, root.velocity.y, root.velocity.z);
     const mu = dom.mu;
     const energy = (v * v) / 2 - mu / r;
-    let apPe = 'escape';
+    this.bodyReadout.setValue(dom.data.name.toUpperCase());
     if (energy < 0) {
       // eccentricity from state vectors
       const rvDot = dx * root.velocity.x + dy * root.velocity.y + dz * root.velocity.z;
@@ -317,12 +379,31 @@ export class OrbitMap {
       const kz = (v2 - mu / r) * dz - rvDot * root.velocity.z;
       const ecc = Math.hypot(kx, ky, kz) / mu;
       const a = -mu / (2 * energy);
-      const ap = a * (1 + ecc) - dom.data.radius;
-      const pe = a * (1 - ecc) - dom.data.radius;
-      apPe = `Ap ${ap.toFixed(0)} m / Pe ${pe.toFixed(0)} m (${dom.data.name})`;
+      this.apReadout.setValue((a * (1 + ecc) - dom.data.radius).toFixed(0));
+      this.peReadout.setValue((a * (1 - ecc) - dom.data.radius).toFixed(0));
+      this.apReadout.setState('nominal');
+      this.peReadout.setState('nominal');
     } else {
-      apPe = `Escape trajectory (${dom.data.name})`;
+      this.apReadout.setValue('ESC');
+      this.peReadout.setValue('ESC');
+      this.apReadout.setState('caution');
+      this.peReadout.setState('caution');
     }
-    this.apPeText.textContent = apPe;
   }
+}
+
+/** Text plate drawn on a canvas texture. Cheap, and readable at any zoom. */
+function makeLabelSprite(text: string): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = LABEL_CANVAS.w;
+  canvas.height = LABEL_CANVAS.h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = `32px 'IBM Plex Mono', monospace`;
+  ctx.fillStyle = LABEL_COLOR;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, LABEL_CANVAS.w / 2, LABEL_CANVAS.h / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  return new THREE.Sprite(mat);
 }
